@@ -401,7 +401,7 @@
 ; ============================================================================
 ;   dec cl; jnz back_to_column_start (0x6D0-ish, ~1286 bytes back)
 ;   pop ds
-;   fill sky: EAX=50505050h, CX=4000h, REP STOSD → fill 64KB with 0x50 (sky color)
+;   fill sky: EAX=50505050h, CX=0040h, REP STOSD → fill 256 bytes (1 row) with 0x50
 ;   compute sky gradient from [0359] heading
                         03d8 13f5 a4fe c90f  ;                             last pixels | dec cl
 00000be0: 85c1 fa1f 66b8 5050 5050 b940 00f3 66ab  ; jnz loop | pop ds | EAX=50505050 | fill sky buffer

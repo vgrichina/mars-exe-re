@@ -36,9 +36,8 @@ for (let i = 0; i < 96; i++) {
     const b = (PAL6[i*3+2] << 2) | (PAL6[i*3+2] >> 4);
     palette[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
 }
-// Remaining entries (96-255) are black (0xFF000000), already default
 
-// Step table from binary @ 0x1450
+// Step table from binary @ 0x1450 (word entries)
 const stepTable = [
     0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,
     16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
@@ -56,8 +55,8 @@ const imgData = ctx.createImageData(SW, H);
 const pixels = new Uint32Array(imgData.data.buffer);
 
 // === Terrain (256×256) ===
-const heightmap = new Uint8Array(65536);   // raw fractal heights for rendering
-const colormap = new Uint8Array(65536);    // palette indices 64-95
+const heightmap = new Uint8Array(65536);
+const colormap = new Uint8Array(65536);
 
 // Camera — binary: pos_x=pos_y=1000, heading=0
 let posX = 1000, posY = 1000, heading = 0;
@@ -69,16 +68,12 @@ function prng() {
     return seed;
 }
 
-// === Perturbation: exact binary IMUL DX + middle-16-bits + SAR 5 + CBW ===
+// === Perturbation: exact binary IMUL + middle-16-bits + SAR 5 + CBW ===
 function perturb(half, avg) {
     const rnd = prng();
     let dx = rnd - 0x67C2;
-    // IMUL: signed multiply AX(=half) * DX(=signed perturbation)
     const product = half * dx;
-    // Take middle 16 bits: MOV AL,AH; MOV AH,DL → (product >> 8)
-    // SAR AX,5 → >> 13 total
     let shifted = product >> 13;
-    // CBW: sign-extend AL (keep only low byte, sign extended)
     let al = shifted & 0xFF;
     if (al > 127) al -= 256;
     let val = avg + al;
@@ -88,80 +83,59 @@ function perturb(half, avg) {
 }
 
 // === Diamond-square: matches binary BX register walk ===
-// Binary: BX = flat 16-bit index. BL = X (low byte), BH = Y (high byte).
-// ADD BL,CL wraps X at 256. ADD BH,CL wraps Y at 256.
 function subdivide(buf, start, size) {
     const half = size >> 1;
     if (half < 1) return;
 
-    let bl = start & 0xFF;       // X
-    let bh = (start >> 8) & 0xFF; // Y
+    let bl = start & 0xFF;
+    let bh = (start >> 8) & 0xFF;
 
-    // Walk around the square reading corners, computing edge midpoints:
-    // Start at TL. ADD BL,half → midpoint. ADD BL,half → "next corner".
-    // This naturally handles 256-wrapping via byte overflow.
-
-    // --- TL corner ---
     const tl = (bh << 8) | bl;
     const tl_v = buf[tl];
 
-    // ADD BL, half → top edge midpoint
     bl = (bl + half) & 0xFF;
     const eTop = (bh << 8) | bl;
 
-    // ADD BL, half → TR corner
     bl = (bl + half) & 0xFF;
     const tr = (bh << 8) | bl;
     const tr_v = buf[tr];
 
-    // Edge 1: top midpoint between TL and TR
     if (buf[eTop] === 0xFF) {
         buf[eTop] = perturb(half, (tl_v + tr_v) >> 1);
     }
 
-    // --- ADD BH, half → right edge midpoint ---
     bh = (bh + half) & 0xFF;
     const eRight = (bh << 8) | bl;
 
-    // ADD BH, half → BR corner
     bh = (bh + half) & 0xFF;
     const br = (bh << 8) | bl;
     const br_v = buf[br];
 
-    // Edge 2: right midpoint between TR and BR
     if (buf[eRight] === 0xFF) {
         buf[eRight] = perturb(half, (tr_v + br_v) >> 1);
     }
 
-    // --- SUB BL, half → bottom edge midpoint ---
     bl = (bl - half) & 0xFF;
     const eBottom = (bh << 8) | bl;
 
-    // SUB BL, half → BL corner
     bl = (bl - half) & 0xFF;
     const blc = (bh << 8) | bl;
     const bl_v = buf[blc];
 
-    // Edge 3: bottom midpoint between BR and BL
     if (buf[eBottom] === 0xFF) {
         buf[eBottom] = perturb(half, (br_v + bl_v) >> 1);
     }
 
-    // --- SUB BH, half → left edge midpoint ---
     bh = (bh - half) & 0xFF;
     const eLeft = (bh << 8) | bl;
 
-    // SUB BH, half → back to TL
     bh = (bh - half) & 0xFF;
-    // buf at (bh,bl) should be TL again
     const tl2_v = buf[(bh << 8) | bl];
 
-    // Edge 4: left midpoint between BL and TL
     if (buf[eLeft] === 0xFF) {
         buf[eLeft] = perturb(half, (bl_v + tl2_v) >> 1);
     }
 
-    // --- Center: avg of 4 CORNERS + perturbation (always written) ---
     const cx = ((start & 0xFF) + half) & 0xFF;
     const cy = (((start >> 8) & 0xFF) + half) & 0xFF;
     const center = (cy << 8) | cx;
@@ -169,26 +143,23 @@ function subdivide(buf, start, size) {
 
     if (half <= 1) return;
 
-    // Recurse on 4 sub-quadrants (binary: modifies start on stack)
     const sx = start & 0xFF;
     const sy = (start >> 8) & 0xFF;
-    subdivide(buf, (sy << 8) | sx, half);                                    // TL
+    subdivide(buf, (sy << 8) | sx, half);
     const sx2 = (sx + half) & 0xFF;
-    subdivide(buf, (sy << 8) | sx2, half);                                   // TR
+    subdivide(buf, (sy << 8) | sx2, half);
     const sy2 = (sy + half) & 0xFF;
-    subdivide(buf, (sy2 << 8) | sx2, half);                                  // BR
-    subdivide(buf, (sy2 << 8) | sx, half);                                   // BL
+    subdivide(buf, (sy2 << 8) | sx2, half);
+    subdivide(buf, (sy2 << 8) | sx, half);
 }
 
 function genColormap() {
     colormap.fill(0xFF);
-    // Binary: corner(0,0)=0, corner(0,128)=FE, corner(128,0)=FE, corner(128,128)=0
     colormap[0x0000] = 0;
-    colormap[0x0080] = 0xFE;   // Y=0, X=128
-    colormap[0x8000] = 0xFE;   // Y=128, X=0
-    colormap[0x8080] = 0;      // Y=128, X=128
+    colormap[0x0080] = 0xFE;
+    colormap[0x8000] = 0xFE;
+    colormap[0x8080] = 0;
     subdivide(colormap, 0, 256);
-    // Transform: byte >> 3 + 0x40 → palette indices 64-95
     for (let i = 0; i < 65536; i++) {
         colormap[i] = (colormap[i] >> 3) + 0x40;
     }
@@ -199,14 +170,12 @@ function genHeightmap() {
     heightmap[0] = 0x80;
     subdivide(heightmap, 0, 256);
 
-    // Post-process 1: smooth (4-neighbor average) — binary does this on the heightmap itself
     const smooth = new Uint8Array(65536);
     for (let i = 0; i < 65536; i++) {
         smooth[i] = (heightmap[i] + heightmap[(i+1) & 0xFFFF] +
                      heightmap[(i+256) & 0xFFFF] + heightmap[(i+257) & 0xFFFF]) >> 2;
     }
 
-    // Post-process 2: slope calc. diff = h[i] - h[i+3] + 32, clamp 0..63
     const slope = new Uint8Array(65536);
     for (let i = 0; i < 65536; i++) {
         let d = smooth[i] - smooth[(i+3) & 0xFFFF] + 32;
@@ -215,7 +184,6 @@ function genHeightmap() {
         slope[i] = d;
     }
 
-    // Post-process 3: smooth the slope (second smooth pass on SAME buffer)
     for (let i = 0; i < 65536; i++) {
         heightmap[i] = (slope[i] + slope[(i+1) & 0xFFFF] +
                         slope[(i+256) & 0xFFFF] + slope[(i+257) & 0xFFFF]) >> 2;
@@ -223,71 +191,81 @@ function genHeightmap() {
 }
 
 // === Renderer (Comanche-style planar voxel) ===
+// Persistent render buffer — binary does NOT clear between frames
 const renderBuf = new Uint8Array(W * H);
 
 function render() {
-    // --- Sky fill: palette 0x50 (index 80) ---
-    renderBuf.fill(0x50);
+    // --- Sky fill: binary fills 1 row of 0x50, then 40 gradient rows ---
+    // Row 0: base sky color 0x50 (palette index 80)
+    const row0off = 0;
+    for (let x = 0; x < W; x++) renderBuf[row0off + x] = 0x50;
 
-    // Sky gradient: binary formula
-    // SI = heading >> 1 + 10, for BL=4..43: val = clamp((SI/BL) >> 7, 0, 63)
-    const skyVal = (Math.abs(heading) >> 1) + 10;
+    // Sky gradient: binary SHR (unsigned shift), NOT Math.abs
+    // SI = [0359] >> 1 + 10; D1 EE = SHR SI, 1 (unsigned)
+    // For BL=4..43 (40 rows): val = clamp((SI / BL) >> 7, 0, 63)
+    const skyVal = ((heading & 0xFFFF) >>> 1) + 10;
     for (let bl = 4; bl < 44; bl++) {
-        let val = ((skyVal / bl) | 0) >> 7;
+        let val = ((skyVal / bl) | 0) >>> 7;
         if (val > 63) val = 63;
-        const row = bl - 4;
+        // Row index: first gradient row overwrites row 1 (DI continues after row 0)
+        const row = bl - 3;
         const off = row * W;
         for (let x = 0; x < W; x++) renderBuf[off + x] = val;
     }
 
-    // --- Voxel ray casting ---
-    // Horizon buffer: tracks the HIGHEST drawn screen Y per column
-    // Binary inits to 125 (0x7D), we use H-1 = 199 (bottom of screen, nothing drawn)
+    // --- Voxel ray casting (matches ray_march at 0xC1F) ---
+    // Horizon buffer: binary inits to 125 (0x7D), stored as Y*256 in binary
     const horizon = new Int32Array(W);
-    horizon.fill(H);
+    horizon.fill(125);
 
-    // Camera direction from heading
-    // Binary: ray_dx = ((-heading >> 3) + 64) << 13 (fixed-point direction)
-    // Convert to angle: the full circle is ~8192 units in the binary's system
-    const baseAngle = ((-heading >> 3) + 64);
-
-    // Planar projection (NOT radial/fish-eye):
-    // Compute forward direction and right-perpendicular direction
-    const fwdAngle = baseAngle * (2 * Math.PI / 8192);
+    // Camera direction: binary formula
+    // ray_dx = ((NEG heading >>> 3) + 0x4000) << 13
+    // 0x4000 = quarter turn in 16-bit angle space (65536 = full circle)
+    const baseAngle = (((-heading) >>> 3) + 0x4000) & 0xFFFF;
+    const fwdAngle = baseAngle * (2 * Math.PI / 0x10000);
     const cosA = Math.cos(fwdAngle);
     const sinA = Math.sin(fwdAngle);
 
-    // Iterate FAR to NEAR: far draws first, near overwrites (painter's algorithm)
-    // Binary: distance counter starts at max, decrements
+    // Binary map coordinates use posX/16 and posY/16 (DX = prev_y << 4, DH = high byte)
+    // BH = (posY >> 4) & 0xFF, adjusted by distance
+    // BL = (posX >> 4) & 0xFF, swept across columns
+    const mapBaseX = (posX >> 4) & 0xFF;
+    const mapBaseY = (posY >> 4) & 0xFF;
+
+    // Iterate FAR to NEAR (painter's algorithm)
     for (let si = stepTable.length - 1; si >= 0; si--) {
         const dist = stepTable[si];
         if (dist < 1) continue;
 
-        // Height scale: perspective factor = K / distance
-        // Binary: [03A2] relates to perspective. The horizon is around row 100.
-        const invDist = 120.0 / dist;
+        // Binary perspective: SI = dist << 4 + fractional Y adjustment
+        // perspective_scale [03A2] = heading/SI + 100 (with heading=0: = 100)
+        // height_scale [03A4] = 0x10000 / SI
+        const SI = (dist << 4) | (15 - (posY & 0xF));
+        const perspScale = 100;
+        const heightScale = (SI <= 2) ? 0 : (0x10000 / SI) | 0;
 
-        // For each column: compute map sample position using PLANAR projection
+        // Per-column perpendicular sweep
+        // Binary: BL advances by step_size/65536 per column
+        // Total sweep across 256 columns ≈ 4*dist map units
+        // Per-column offset from center = (col - 128) * dist / 64
         for (let col = 0; col < W; col++) {
-            // Planar offset: column maps linearly to a perpendicular offset
-            // center column (128) = straight ahead
-            const perpOffset = (col - 128) * 0.7;
+            const perpOffset = (col - 128) * dist / 64;
 
-            // Sample point = camera + forward*dist + right*perpOffset
-            const sampleX = (posX + cosA * dist - sinA * perpOffset) & 0xFF;
-            const sampleY = (posY + sinA * dist + cosA * perpOffset) & 0xFF;
+            // Map sample position (binary uses posX/16, posY/16 + dist for forward)
+            const sampleX = (mapBaseX + cosA * perpOffset - sinA * dist) & 0xFF;
+            const sampleY = (mapBaseY + sinA * perpOffset + cosA * dist) & 0xFF;
             const mapIdx = ((sampleY & 0xFF) << 8) | (sampleX & 0xFF);
 
-            // Terrain height (0-63 from slope processing)
             const h = heightmap[mapIdx];
 
-            // Project to screen Y: taller terrain → smaller Y
-            let screenY = (100 - (h - 16) * invDist) | 0;
+            // Binary projection: screenY = perspScale - (h * 256 * heightScale) >> 16
+            // = perspScale - h * heightScale / 256
+            // = 100 - h * 256 / SI (approximately)
+            let screenY = (perspScale - ((h << 8) * heightScale >>> 16)) | 0;
             if (screenY < 0) screenY = 0;
-            if (screenY >= H) screenY = H;
+            if (screenY >= H) screenY = H - 1;
 
             if (screenY < horizon[col]) {
-                // Draw column from screenY down to horizon
                 const color = colormap[mapIdx];
                 for (let y = screenY; y < horizon[col]; y++) {
                     renderBuf[y * W + col] = color;
@@ -317,8 +295,6 @@ function render() {
 }
 
 // === Input ===
-// Binary: mouse dX → pos_x (slides camera), mouse dY → pos_y
-// Heading is NOT directly controlled by mouse — it auto-updates from movement
 let mouseDown = false, lastMX = 0, lastMY = 0;
 canvas.addEventListener('mousedown', e => { mouseDown = true; lastMX = e.clientX; lastMY = e.clientY; e.preventDefault(); });
 window.addEventListener('mouseup', () => mouseDown = false);
@@ -326,7 +302,6 @@ window.addEventListener('mousemove', e => {
     if (!mouseDown) return;
     const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
     lastMX = e.clientX; lastMY = e.clientY;
-    // Binary: pos_x += mouse_dx, pos_y -= mouse_dy
     posX += dx;
     posY -= dy;
 });
@@ -341,17 +316,17 @@ canvas.addEventListener('touchmove', e => {
     e.preventDefault();
 }, {passive:false});
 
-// Keyboard for heading control (the binary uses mouse buttons/speed for heading)
+// Keyboard — heading rotates view, WASD moves in facing direction
 window.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft' || e.key === 'a') heading -= 100;
-    if (e.key === 'ArrowRight' || e.key === 'd') heading += 100;
+    if (e.key === 'ArrowLeft' || e.key === 'a') heading -= 4000;
+    if (e.key === 'ArrowRight' || e.key === 'd') heading += 4000;
     if (e.key === 'ArrowUp' || e.key === 'w') {
-        const a = ((-heading >> 3) + 64) * 2 * Math.PI / 8192;
-        posX += Math.cos(a) * 5; posY += Math.sin(a) * 5;
+        const a = ((((-heading) >>> 3) + 0x4000) & 0xFFFF) * 2 * Math.PI / 0x10000;
+        posX += Math.cos(a) * 80; posY += Math.sin(a) * 80;
     }
     if (e.key === 'ArrowDown' || e.key === 's') {
-        const a = ((-heading >> 3) + 64) * 2 * Math.PI / 8192;
-        posX -= Math.cos(a) * 5; posY -= Math.sin(a) * 5;
+        const a = ((((-heading) >>> 3) + 0x4000) & 0xFFFF) * 2 * Math.PI / 0x10000;
+        posX -= Math.cos(a) * 80; posY -= Math.sin(a) * 80;
     }
 });
 
