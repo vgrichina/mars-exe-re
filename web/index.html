@@ -67,7 +67,7 @@ const colormap = new Uint8Array(65536);   // buffer3: fractal color indices
 // effectively a pitch/perspScale boost, NOT a rotation (0xFFFF and 0 give same direction).
 // Web separates: viewAngle for rotation (added for interactivity), heading for perspScale.
 let posX = 1000, posY = 1000;
-let heading = 0xFFFF;   // perspScale control: heading/SI + 100 (binary: 0xFFFF when mouse present)
+let heading = 0;        // perspScale control: heading/SI + 100. Binary: 0 normally, 0xFFFF only on rare mouse overflow
 let viewAngle = 0;      // rotation angle (web-only, not in binary)
 let seed = (Date.now() * 7) & 0x7FFF;
 
@@ -233,9 +233,10 @@ function render() {
     }
 
     // --- Voxel ray casting (matches ray_march at 0xC1F) ---
-    // Horizon buffer: binary inits to 125 (0x7D)
+    // Horizon buffer: binary inits words to 0x7D00 (32000), meaning "nothing drawn yet"
+    // Web equivalent: use H (200) since we clamp drawing to visible area
     const horizon = new Int32Array(W);
-    horizon.fill(125);
+    horizon.fill(H);
 
     // Camera direction: binary sweeps X (perpendicular) and walks +Y (forward).
     // The +0x4000 in binary's render_columns is for the MOVSB pass (not ported).
@@ -294,14 +295,19 @@ function render() {
             const interpH = (((hShifted >> 8) + h0) & 0xFF); // ADD AH, FS:[BX]
 
             // Binary projection: screenY = perspScale - (interpH * 256 * heightScale) >> 16
+            // Binary clamps: negative → -1 (0xFFFF), >= 200 → 199
             let screenY = (perspScale - ((interpH << 8) * heightScale >>> 16)) | 0;
-            if (screenY < 0) screenY = 0;
             if (screenY >= H) screenY = H - 1;
+            // Note: screenY can be negative (terrain above screen top)
 
             const oldHorizon = horizon[col];
             const columnHeight = (oldHorizon - screenY) | 0;
             if (columnHeight <= 0) continue;
             horizon[col] = screenY;
+
+            // Clamp drawing to visible area (binary uses extended dispatch entries for off-screen)
+            const drawStart = screenY < 0 ? 0 : screenY;
+            const drawEnd = oldHorizon > H ? H : oldHorizon;
 
             // --- Color interpolation from slopemap (GS in binary, 0xD1C-0xD3A) ---
             // CH = high byte of halfFrac (fractional X position, NOT distance)
@@ -324,7 +330,11 @@ function render() {
             let drawColor = oldColor;  // POP DX = old color
 
             // Dispatch table draw: MOV [DI+offset], DH; ADD DX, AX
-            for (let y = screenY; y < oldHorizon; y++) {
+            // Advance drawColor for off-screen rows above visible area
+            if (drawStart > screenY) {
+                drawColor = (drawColor + colorStep * (drawStart - screenY)) | 0;
+            }
+            for (let y = drawStart; y < drawEnd; y++) {
                 renderBuf[y * W + col] = (drawColor >> 8) & 0xFF;
                 drawColor = (drawColor + colorStep) | 0;
             }
