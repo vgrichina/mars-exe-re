@@ -5,9 +5,9 @@
 ; Segments (relocated at load time):
 ;   DS:0343 → CS segment (load_seg)
 ;   DS:0345 → DS segment (load_seg + 010C)
-;   DS:0347 → buffer1 seg (load_seg + 0E07) — heightmap 256x256
-;   DS:0349 → buffer2 seg (load_seg + 1E07) — colormap 256x256
-;   DS:034B → buffer3 seg (load_seg + 2E07) — work buffer
+;   DS:0347 → buffer1 seg (load_seg + 0E07) — heightmap 256x256 (FS during render)
+;   DS:0349 → buffer2 seg (load_seg + 1E07) — slope/shading 256x256 (GS during render)
+;   DS:034B → buffer3 seg (load_seg + 2E07) — colormap 256x256
 ;   DS:033D = A000h — VGA framebuffer segment (constant, not relocated)
 ;
 ; Key DS variables (in BSS, beyond file end):
@@ -202,11 +202,11 @@
 000003c0: 00c1 e802 2688 0446 75d0                  ; avg = sum>>2 | store | SI++ | loop
 
 ; --- height difference / slope calc loop ---
-;   for each cell: diff = height[i] - height[i+3], clamp 0..63
-;   scale to palette: val*100/64, store
+;   for each cell: diff = height[i] - height[i+3] + 32, clamp 0..63
+;   store to FS (buffer2 = slope/shading buffer) via FS: prefix (64h)
                               33f6 268a 0432  ;                           SI=0 | AL=ES:[SI]
 000003d0: e426 2a44 0380 dc00 0520 0079 0233 c03d  ; AH=0 | diff=AL-[SI+3] | +32 | clamp>=0 | clamp<=63
-000003e0: 3f00 7603 b83f 0064 8804 4675 df          ; if>63: 63 | *100 | store | loop
+000003e0: 3f00 7603 b83f 0064 8804 4675 df          ; if>63: 63 | FS: MOV [SI],AL (store to slope buf) | SI++ | loop
 
 ; --- second smooth pass ---
                                         33f6 26  ;                                     SI=0
@@ -281,12 +281,38 @@
 ;   check keypress (int 16h AH=01) → set quit_flag
 ;   int 16h AH=00 to consume key
 ;   ret
-00000600: 02e8 15fe 83c4 04c3 33c9 33d2 33c0 803e  ; (end of subdivide) | xor cx,dx,ax | cmp
-00000610: 5b03 0074 0eb8 0b00 cd33 5152 b805 00cd  ; mouse_present? | int33h(0Bh) mouse motion | push CX,DX | int33h(05h)
-00000620: 335a 5901 0e51 0329 1653 038b 0e51 038b  ; pop | pos_x+=cx | pos_y-=dx | load positions
-00000630: 1653 0389 0e55 0389 1657 03e8 1e0c 80c4  ; save prev | call sky_and_render | speed check
-00000640: 1973 03b8 ffff a359 03b4 01cd 1674 09c6  ; angle update | key check (int 16h)
-00000650: 065f 0301 32e4 cd16 c3                    ; quit_flag=1 | consume key | ret
+;   CS:0408 (file 0x608):
+;   XOR CX,CX; XOR DX,DX; XOR AX,AX
+;   CMP byte [035B], 0       ; mouse_present?
+;   JZ +14                   ; skip mouse if absent
+;   MOV AX, 000Bh; INT 33h  ; read mouse motion → CX=dX, DX=dY
+;   PUSH CX; PUSH DX
+;   MOV AX, 0005h; INT 33h  ; read button status → AX=buttons
+;   POP DX; POP CX
+;   ADD [0351], CX           ; pos_x += mouse_dx
+;   SUB [0353], DX           ; pos_y -= mouse_dy
+;   MOV CX,[0351]; MOV DX,[0353]  ; reload positions
+;   MOV [0355],CX; MOV [0357],DX  ; save to prev_x, prev_y
+;   CALL 0x125C              ; → overlapping insn: TEST BP,BP; STC; RET (no-op, AH unchanged)
+;   ADD AH, 19h              ; AH = button status high byte + 0x19
+;   JNC +3                   ; if no carry (AH+19h < 100h), skip
+;   MOV AX, FFFFh            ; heading = 0xFFFF (only when AH+19h overflows)
+;   MOV [0359], AX
+;   MOV AH, 01h; INT 16h    ; BIOS: check keyboard buffer
+;   JZ +9                    ; no key → skip to ret
+;   MOV byte [035F], 1       ; quit_flag = 1
+;   XOR AH, AH; INT 16h     ; consume key
+;   RET
+; Note: with no mouse, AX=0 throughout → AH+19h=19h, no carry → heading stays 0.
+; With mouse, AH from INT 33h(05h) button status can overflow → heading=FFFFh.
+; heading=FFFFh boosts perspScale (heading/SI+100) to ~260 for typical SI values,
+; pushing terrain projection down on screen for a horizon-level view.
+00000600: 02e8 15fe 83c4 04c3 33c9 33d2 33c0 803e  ; (end of subdivide) | XOR CX,DX,AX | CMP [035B],0
+00000610: 5b03 0074 0eb8 0b00 cd33 5152 b805 00cd  ; JZ skip | INT 33h(0Bh) mouse motion | PUSH CX,DX | INT 33h(05h)
+00000620: 335a 5901 0e51 0329 1653 038b 0e51 038b  ; POP DX,CX | pos_x+=CX | pos_y-=DX | CX=[0351] DX=[0353]
+00000630: 1653 0389 0e55 0389 1657 03e8 1e0c 80c4  ; [0355]=CX [0357]=DX | CALL 125C | ADD AH,19h
+00000640: 1973 03b8 ffff a359 03b4 01cd 1674 09c6  ; JNC+3 | heading=FFFF | INT 16h(01) | JZ+9 | quit=1
+00000650: 065f 0301 32e4 cd16 c3                    ; XOR AH,AH | INT 16h(00) consume | RET
 
 ; ============================================================================
 ; render_columns — CS:0459 (file 0x659)
@@ -450,14 +476,43 @@
 ;   if new terrain visible above current horizon:
 ;     compute column height, look up jump table, draw pixels
 ;   advance ray by step amount, update horizon tracker
-                                          d1e9  ;                                       >>1
-00000ce0: 648a 4701 32e4 642a 0780 dc00 f7e9 0fac  ; FS: height[next]-height[cur] | sign ext | *CX
-00000cf0: d007 6402 27f7 26a4 038b 3ea2 032b fa79  ; shrd | GS: color lookup | *[03A4] | DI=[03A2]-DI
-00000d00: 03bf ffff 81ff c800 7c03 bfc7 008b acaa  ; clamp DI 0..199 | load prev horizon from buffer
-00000d10: 0389 bcaa 032b ef0f 8905 05c1 e708 033e  ; store new horizon | height = old-new | <<8 | +[0364]
-00000d20: 6403 658a 4701 652a 07f6 edd1 e065 0227  ; FS: sample delta | GS: color | compute intensity
-00000d30: 8bd0 8784 aa05 502b c299 f7fd 5ad1 e53e  ; exchange with buffer | compute step | SHL BP
-00000d40: ffa6 9001                                 ; JMP [DS:BP+0190] → jump table dispatch
+; --- height interpolation + projection ---
+;   SHR CX, 1                     CX = halfDist
+;   MOV AL, FS:[BX+1]             height at next sample
+;   XOR AH, AH                    zero extend
+;   SUB AL, FS:[BX]               delta = height[next] - height[cur]
+;   SBB AH, 0                     sign extend subtraction
+;   IMUL CX                       delta * halfDist → DX:AX
+;   SHRD AX, DX, 7                extract middle bits (>>7)
+;   ADD AH, FS:[BX]               add base height → interpolated height in AH
+;   MUL [03A4]                    * height_scale → projected height in DX
+;   DI = [03A2] - DX              screenY = perspScale - projected
+;   clamp DI to 0..199
+;   BP = [SI+03AA] (old horizon), [SI+03AA] = DI (update), BP -= DI (column height)
+;   JNS to 0x121A if BP < 0 (skip if not visible)
+;   DI = DI << 8 + [0364]         render buffer offset
+; --- color interpolation (GS = slopemap) ---
+;   MOV AL, GS:[BX+1]             slope at next sample
+;   SUB AL, GS:[BX]               slope delta
+;   IMUL CH                        * (halfDist >> 8)
+;   SHL AX, 1                     *2
+;   ADD AH, GS:[BX]               add base slope → interpolated color in AH
+;   DX = AX                       DH = starting pixel color
+;   XCHG AX, [SI+05AA]            swap with prev step's color for this column
+;   PUSH AX (old color)
+;   AX = oldColor - newColor       color delta between distance steps
+;   CWD; IDIV BP                   / columnHeight = color step per scanline
+;   POP DX                         DX = old color (starting value)
+;   SHL BP, 1                     word offset into jump table
+;   JMP [DS:BP+0190]              dispatch into unrolled draw
+                                          d1e9  ;                                       SHR CX,1
+00000ce0: 648a 4701 32e4 642a 0780 dc00 f7e9 0fac  ; FS:[BX+1] | XOR AH | SUB FS:[BX] | SBB AH,0 | IMUL CX | SHRD
+00000cf0: d007 6402 27f7 26a4 038b 3ea2 032b fa79  ; AX,DX,7 | ADD AH,FS:[BX] | MUL [03A4] | DI=[03A2]-DX | JNS
+00000d00: 03bf ffff 81ff c800 7c03 bfc7 008b acaa  ; clamp 0..199 | BP=[SI+03AA] old horizon
+00000d10: 0389 bcaa 032b ef0f 8905 05c1 e708 033e  ; [SI+03AA]=DI | BP-=DI | JNS skip | DI<<=8 | DI+=[0364]
+00000d20: 6403 658a 4701 652a 07f6 edd1 e065 0227  ; GS:[BX+1] | SUB GS:[BX] | IMUL CH | SHL AX,1 | ADD AH,GS:[BX]
+00000d30: 8bd0 8784 aa05 502b c299 f7fd 5ad1 e53e  ; DX=AX | XCHG [SI+05AA] | PUSH | SUB | CWD | IDIV BP | POP DX | SHL BP
+00000d40: ffa6 9001                                 ; JMP [DS:BP+0190] → dispatch table draw
 
 ; ============================================================================
 ; COLUMN DRAW DISPATCH TABLE TARGET AREA — CS:0B3E+ (file 0xD3E+)

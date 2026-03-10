@@ -20,8 +20,8 @@
 ## Key segments
 - CS = load segment (code + inline data)
 - DS = CS + 0x10C (runtime data, heightmap pointers, variables)
-- FS = heightmap buffer (CS + 0x0E07)
-- GS = colormap buffer (CS + 0x1E07)
+- FS = heightmap buffer (CS + 0x0E07) — buffer1, smoothed fractal heights
+- GS = slope/shading buffer (CS + 0x1E07) — buffer2, h[i]-h[i+3]+32 clamped 0..63
 - VGA framebuffer: A000:0000
 
 ## Key DS variables (BSS, beyond file end)
@@ -31,12 +31,12 @@
 | DS:0353 | pos_y | Camera Y, init 1000 |
 | DS:0355 | prev_x | Saved pos_x each frame |
 | DS:0357 | prev_y | Saved pos_y each frame |
-| DS:0359 | heading | Angle/direction (binary: 0 or 0xFFFF only) |
+| DS:0359 | heading | Angle/direction; set to 0xFFFF by speed check when mouse present. Controls perspScale (heading/SI+100) |
 | DS:035B | mouse_present | Flag from INT 33h |
 | DS:035D | random_seed | From BIOS timer INT 1Ah |
 | DS:035F | quit_flag | Set on keypress |
 | DS:03A0 | distance_counter | Step table word offset, starts 0x78=120 |
-| DS:03A2 | perspective_scale | heading/SI + 100 (≈100 always) |
+| DS:03A2 | perspective_scale | heading/SI + 100 (dynamic, not constant) |
 | DS:03A4 | height_scale | 0x10000 / SI |
 | DS:03A6 | step_size | SI << 6 (dword) |
 | DS:03AA | horizon_buf | 256 words, init 0x7D00 (=125) |
@@ -49,9 +49,9 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Key algorithms ported
 1. **PRNG**: `seed = (seed * 0xAB + 0x2BCD) % 0xCF85`; perturbation = `(half * (seed - 0x67C2)) >> 13`, CBW-clamped to signed byte
 2. **Diamond-square**: uses binary's BX register walk (BL=X, BH=Y, byte-wrapping at 256). Seeds corners, computes 4 edge midpoints + center, recurses on 4 quadrants
-3. **Heightmap post-processing**: smooth → slope calc (`h[i]-h[i+3]+32`, clamp 0..63) → smooth again
+3. **Heightmap post-processing**: smooth buffer1 in-place → slope calc from buffer1 to buffer2/slopemap (`h[i]-h[i+3]+32`, clamp 0..63) → smooth buffer1 in-place again. Heightmap retains fractal heights (0-255 range), slopemap has slope/shading values (0-63)
 4. **Colormap**: same fractal, transformed to palette indices 64-95 (`byte>>3 + 0x40`)
-5. **Renderer**: Comanche-style planar voxel ray caster. Far-to-near iteration using step table for LOD. Horizon buffer tracks highest drawn pixel per column
+5. **Renderer**: Comanche-style planar voxel ray caster. Far-to-near iteration using step table for LOD. Horizon buffer tracks highest drawn pixel per column. Height interpolation between adjacent samples. Vertical Gouraud color shading via slopemap with per-scanline color stepping (dispatch table: MOV [DI+off],DH; ADD DX,AX). XCHG buffer tracks color between distance steps for smooth blending
 6. **Palette**: 96 entries extracted from binary at file offset 0x14CA (6-bit VGA DAC values)
 7. **Sky gradient**: `val = clamp((heading>>>1 + 10) / row) >>> 7, 63)` for 40 rows
 
@@ -61,7 +61,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | Horizon init | 125 (0x7D) | 0xC32: `66 B8 00 7D 00 7D` |
 | Angle offset | 0x4000 | 0x66D: `05 00 40` (ADD AX, 0x4000) |
 | Angle shift | SHR (unsigned) | 0x66A: `C1 E8 03` |
-| Perspective center | 100 (0x64) | 0xC69: `05 64 00` |
+| Perspective center | heading/SI + 100 | 0xC60: `33 D2 F7 F6 05 64 00` (XOR DX; DIV SI; ADD AX,100) |
 | Height scale | 0x10000/SI | 0xC90: `F7 F6` (DIV SI) |
 | Map position | posX>>4, posY>>4 | 0xCB2: `C1 E2 04` (SHL DX,4 → DH=high) |
 | Sky fill | 1 row + 40 gradient | 0xBE4: CX=0x40 (64 dwords) |
@@ -79,8 +79,10 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | unrolled column draw | 0x6D9-0xBD7 | (uses dispatch table approach instead) |
 | fill_sky | 0xBDA | sky gradient in `render()` |
 | ray_march | 0xC1F | distance-step loop in `render()` |
-| dispatch table draw | 0xD3E+ | column fill loop in `render()` |
-| interpolation | 0x125C | (simplified — no bilinear interp yet) |
+| dispatch table draw | 0xD3E+ | column fill loop with Gouraud shading in `render()` |
+| height interpolation | 0xCDA-0xCF2 | height interp between adjacent samples in `render()` |
+| color interpolation | 0xD1C-0xD3A | slopemap color interp + XCHG step blending in `render()` |
+| bilinear interpolation | 0x125C | (not ported — used in MOVSB pass only) |
 | Jump table | 0x12C0 | (not needed — web uses loop) |
 | Step table | 0x1450 | `stepTable[]` array |
 | Palette data | 0x14CA | `PAL6[]` array |
@@ -110,7 +112,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 
 ### Known differences from binary
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA
-- Web lacks bilinear height interpolation (binary interpolates between samples)
-- Binary has two rendering passes (MOVSB-based + dispatch table); web has one
+- Binary has two rendering passes (MOVSB-based colormap + dispatch table slopemap); web only has dispatch-table-equivalent pass using slopemap
 - Keyboard heading control added for interactivity (binary only uses mouse position)
 - Render buffer is cleared each frame (binary retains previous frame data below row 125)
+- Binary's handle_input CALL 0x125C is overlapping instruction trick (TEST BP,BP; STC; RET) — no-op that preserves AH from INT 33h. Speed check (ADD AH,19h; JNC) sets heading=0xFFFF when mouse present. Web initializes heading=0xFFFF to match.
