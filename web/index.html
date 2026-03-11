@@ -214,6 +214,9 @@ const renderBuf = new Uint8Array(W * H);
 const prevColor = new Int16Array(W);
 
 function render() {
+    // Binary clears prevColor buffer (DS:05AA) every frame at 0xC40: EAX=0, REP STOSD
+    prevColor.fill(0);
+
     // --- Sky fill: binary fills 1 row of 0x50, then 40 gradient rows ---
     // Row 0: base sky color 0x50 (palette index 80)
     const row0off = 0;
