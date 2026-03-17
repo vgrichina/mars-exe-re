@@ -196,10 +196,15 @@
 00000360: ffff ffb9 0040 f366 abb8 ab00 f726 5d03  ; | CX=16384 | REP STOSD | PRNG
 00000370: 05cd 2b83 d200 f736 4d03 8916 5d03 8bf2  ; | mod | seed update
 00000380: 26c6 0600 0080 6a00 6800 01e8 8b00 83c4  ; corner(0,0)=80 | push 0,256 | call subdivide | cleanup
-00000390: 0433 f68b 3e4f 03c1 e704 8b9d 1f03 268a  ; SI=0 | DI=[034F]<<4 | smooth loop start
-000003a0: 0032 e48b 9d21 0326 0200 80d4 008b 9d23  ; read neighbors, accumulate
-000003b0: 0326 0200 80d4 008b 9d25 0326 0200 80d4  ; add neighbor values
-000003c0: 00c1 e802 2688 0446 75d0                  ; avg = sum>>2 | store | SI++ | loop
+; --- first smooth pass (table-driven asymmetric kernel) ---
+;   DI = [034F] << 4 = 1 << 4 = 16
+;   Loads 4 neighbor offsets from DS:031F+DI (= DS:032F, 0331, 0333, 0335)
+;   Offsets: {0x0000, 0x0004, 0x0202, 0xFEFF} = {(x,y), (x+4,y), (x+2,y+2), (x-1,y-1)}
+;   NOT a standard 2×2 box — sparse/asymmetric smoothing pattern
+00000390: 0433 f68b 3e4f 03c1 e704 8b9d 1f03 268a  ; SI=0 | DI=[034F]<<4=16 | BX=[DI+031F]=[032F]=0 | AL=ES:[BX+SI]
+000003a0: 0032 e48b 9d21 0326 0200 80d4 008b 9d23  ; AH=0 | BX=[0331]=4 | AL+=ES:[BX+SI] | ADC AH | BX=[0333]=0x202
+000003b0: 0326 0200 80d4 008b 9d25 0326 0200 80d4  ; AL+=ES:[BX+SI] | ADC AH | BX=[0335]=0xFEFF | AL+=ES:[BX+SI] | ADC AH
+000003c0: 00c1 e802 2688 0446 75d0                  ; AX>>=2 (avg of 4) | ES:[SI]=AL | SI++ | JNZ loop (64K iterations)
 
 ; --- height difference / slope calc loop ---
 ;   for each cell: diff = height[i] - height[i+3] + 32, clamp 0..63
@@ -210,9 +215,9 @@
 
 ; --- second smooth pass ---
                                         33f6 26  ;                                     SI=0
-000003f0: 8a04 32e4 2602 4401 80d4 0026 0284 0001  ; AL=[SI] | +[SI+1] | +[SI+256] | +[SI+257]
-00000400: 80d4 00c1 e802 2688 0446 75db 8e06 4503  ; >>2 avg | store | loop | ES=DS
-00000410: c3                                        ; ret
+000003f0: 8a04 32e4 2602 4401 80d4 0026 0284 0001  ; AL=[SI] | +[SI+1] | +[SI+256]
+00000400: 80d4 0026 0284 0101 80d4 00c1 e802 2688  ; +[SI+257] | >>2 avg | store
+00000410: 0446 75db 8e06 4503 c3                    ; loop → 0x3EF | ES=DS | ret
 
 ; ============================================================================
 ; subdivide(start, size) — CS:0219 (file 0x419)
@@ -316,7 +321,8 @@
 
 ; ============================================================================
 ; render_columns — CS:0459 (file 0x659)
-; Set up voxel renderer: clear buffer, compute ray parameters
+; PASS 1: Floor plane renderer. Draws flat ground texture using colormap.
+; Renders 99 scanline rows using 1/y perspective (DIV ECX at 0x6A0).
 ; ============================================================================
 ;   mov di, 07AAh         render buffer start
 ;   mov ecx, 63h          99 iterations? (columns / 2 + setup)
@@ -325,14 +331,16 @@
 ;   set up DS, ES, FS, GS segments for heightmap/colormap access
 ;   begin ray-casting loop
                     bf aa07 66b9 6300  ;                           DI=07AA | ECX=99
-00000660: 0000 6633 c0a1 5903 f7d8 c1e8 0305 0040  ; EAX=0 | AX=[0359] heading | negate | >>3 | +64
+00000660: 0000 6633 c0a1 5903 f7d8 c1e8 0305 0040  ; EAX=0 | AX=[0359] heading | NEG AX | SHR AX,3 | ADD AX,0x4000
 00000670: 66c1 e00d 66a3 6003 6633 c0a1 5503 66c1  ; EAX<<=13 → [0360] ray_dx | EAX=0 | AX=[0355]
 00000680: e009 66a3 6403 6633 c0a1 5703 66c1 e009  ; <<9 → [0364] ray_x | EAX=0 | AX=[0357] | <<9
-00000690: 66a3 6803 1e8e 2e45 038e 1e4b 0366 65a1  ; → [0368] ray_y | push DS | DS=[0345] ES=[034B]
+00000690: 66a3 6803 1e8e 2e45 038e 1e4b 0366 65a1  ; → [0368] ray_y | push DS | GS=[0345](DS seg) DS=[034B](colormap)
 
-; --- inner voxel ray-march loop (casting one column) ---
-;   GS:ES used for heightmap/colormap lookup
-;   fixed-point stepping along ray direction
+; --- inner floor-plane ray-march loop (casting one scanline row) ---
+;   DS = colormap buffer (source for MOVSB pixel copy)
+;   ES = original DS segment (destination: render buffer at ES:07AA)
+;   GS = original DS segment (for variable access via GS: prefix)
+;   fixed-point stepping along ray direction per scanline
 ;   for each step: sample height, compare to screen column, draw if visible
 000006a0: 6003 6633 d266 f7f1 6665 8b36 6403 6665  ; load ray params | div | GS: load positions
 000006b0: 8b2e 6803 662b f066 03e8 66c1 e807 8bde  ; compute deltas | shift
@@ -340,11 +348,16 @@
 000006d0: 0bf5 668b e866 c1ed 10                    ; combine | save height
 
 ; ============================================================================
-; UNROLLED COLUMN DRAW — CS:04D9 (file 0x6D9)
-; 200 iterations of: movsb [0x03A4], adc bx, si; cmc; movsb [0x03D8], ...
-; Pattern: A4 03 D8 13 F5 repeating = pixel write + step + carry chain
-; Each 5-byte group draws one scanline pixel in a vertical column
-; 200 × 5 = 1000 bytes (0x6D9 to 0xAC0 approximately)
+; UNROLLED FLOOR DRAW — CS:04D9 (file 0x6D9)
+; 200 iterations: MOVSB + ADD BX,AX + ADC SI,BP + CMC
+; Pattern: A4 03 D8 13 F5 repeating
+;   A4 = MOVSB: copy DS:[SI] (colormap) → ES:[DI] (render buf), inc SI, inc DI
+;   03 D8 = ADD BX, AX (advance fractional ray position)
+;   13 F5 = ADC SI, BP (advance integer ray position = colormap index via carry)
+;   F5 = CMC (complement carry for next iteration)
+; Each pixel samples a different colormap position along the ray.
+; DI starts at 07AA (render buffer), increments by 1 per pixel.
+; 200 × 5 = 1000 bytes (0x6D9 to 0xBD7)
 ; ============================================================================
                               4da4 03d8 13f5 a4  ;                             start unrolled draw
 000006e0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ; scanline draw × 3
@@ -437,14 +450,14 @@
 00000c20: 80fb 2c75 d7c3                            ; if BL<44: loop sky gradient rows | ret
 
 ; ============================================================================
-; ray_march — CS:0A1F (file 0xC1F) — RENAMED: this is the main rendering engine
-; Cast rays across terrain, draw columns into render buffer
+; ray_march — CS:0A1F (file 0xC1F)
+; PASS 2: Voxel heightmap renderer. Draws 3D terrain columns over floor plane.
 ; ============================================================================
 ;   Called from main loop. Sets up segment registers for terrain access.
 ;   FS = heightmap buffer ([0347])
 ;   GS = colormap buffer ([0349])
 ;   Initialize ray origin from camera position
-;   For each distance step (near to far):
+;   For each distance step (far to near):
 ;     sample heightmap at FS:[map_index]
 ;     compare height to projected screen Y
 ;     if terrain visible: draw column via unrolled loop or jump table
@@ -487,9 +500,9 @@
 ;   ADD AH, FS:[BX]               add base height → interpolated height in AH
 ;   MUL [03A4]                    * height_scale → projected height in DX
 ;   DI = [03A2] - DX              screenY = perspScale - projected
-;   clamp DI to 0..199
+;   clamp DI: <0 → -1 (0xFFFF), ≥200 → 199
 ;   BP = [SI+03AA] (old horizon), [SI+03AA] = DI (update), BP -= DI (column height)
-;   JNS to 0x121A if BP < 0 (skip if not visible)
+;   JNS skip when BP >= 0 (no descending terrain to draw)
 ;   DI = DI << 8 + [0364]         render buffer offset
 ; --- color interpolation (GS = slopemap) ---
 ;   MOV AL, GS:[BX+1]             slope at next sample
@@ -711,19 +724,36 @@
 000015e0: 2632 2727 3228 2832 2929 3f3f 3f          ; pal[107-110]: bright | pal[111]: 3F,3F,3F (white)
 
 ; ============================================================================
-; DATA: VARIABLES — DS:032A+ (file 0x15EA+)
+; DATA: VARIABLES — DS:032D+ (file 0x15ED+)
 ; Mix of initialized constants and BSS (beyond file = zeroed at load)
+; Byte-level mapping (DS:offset = file offset, verified from DS:033D=A000h anchor):
 ; ============================================================================
-                                       9d30 00  ;                                  [032C]=0x309D (?)
-000015f0: 0004 0002 02ff fe00 0000 0000 0000 a000  ; [032E]=4 [0330]=0x0200 [0332]=FF02 [0334]=FE00 | zeros | [033D]=A000 (VGA seg)
-00001600: 0040 0000 000c 01                         ; [033F]=4000 [0341]=0000 | [0343..034B] = reloc'd segments:
-;   file 0x1603: [0343]=0000 → +load_seg = CS
-;   file 0x1605: [0345]=010C → +load_seg = DS
-;   file 0x1607: [0347]=0E07 → +load_seg = heightmap seg
-;   file 0x1609: [0349]=1E07 → +load_seg = colormap seg
-;   file 0x160B: [034B]=2E07 → +load_seg = work buffer seg
-                        07 0e07 1e07 2e85 cf01  ;                       0E07|1E07|2E07 | [034D]=CF85 [034F]=01CF
-00001610: 00                                       ; end of file
+;
+; --- Smooth kernel offset table (used by first smooth pass at 0x390) ---
+;   Indexed by [034F]<<4 = DI=16 into base DS:031F
+;   Reads 4 word offsets at DS:032F, 0331, 0333, 0335
+;   These are neighbor offsets for averaging in the 256×256 heightmap:
+;     0x0000 = (x, y)       — current cell
+;     0x0004 = (x+4, y)     — 4 columns right
+;     0x0202 = (x+2, y+2)   — 2 rows down, 2 right (= 2*256+2)
+;     0xFEFF = (x-1, y-1)   — 1 row up, 1 left (= -257 mod 65536)
+;   This creates an asymmetric/sparse smoothing kernel (NOT standard 2×2 box)
+;
+                                       9d30 00  ;   DS:032D=0x309D (palette tail/padding)
+000015f0: 0004 0002 02ff fe00 0000 0000 0000 a000  ; DS:032F=[00,00]=0x0000 | DS:0331=[04,00]=0x0004
+;                                                  ; DS:0333=[02,02]=0x0202 | DS:0335=[FF,FE]=0xFEFF
+;                                                  ; DS:0337-033C = zeros | DS:033D=[00,A0]=0xA000 (VGA seg)
+00001600: 0040 0000 000c 01                         ; DS:033F=[00,00]=0x0000 | DS:0340=[00,40]=0x4000
+;                                                  ; DS:0342=[00,00]=0x0000
+;   Relocated segment pointers (DS:0343..034B):
+;   file 0x1603: [0343]=[00,00]=0x0000 → +load_seg = CS
+;   file 0x1605: [0345]=[0C,01]=0x010C → +load_seg = DS
+;   file 0x1607: [0347]=[07,0E]=0x0E07 → +load_seg = heightmap seg (FS)
+;   file 0x1609: [0349]=[07,1E]=0x1E07 → +load_seg = slopemap seg (GS)
+;   file 0x160B: [034B]=[07,2E]=0x2E07 → +load_seg = colormap seg
+                        07 0e07 1e07 2e85 cf01  ;   [034D]=[85,CF]=0xCF85 (PRNG modulus)
+;                                                  ; [034F]=[01,00]=0x0001 (smooth kernel selector: 1<<4=16)
+00001610: 00                                       ; end of file (DS:0350=0x00)
 
 ; BSS variables (not in file, zeroed by DOS loader):
 ;   DS:0351 — pos_x (word, init to 03E8 = 1000)

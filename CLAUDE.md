@@ -27,6 +27,10 @@
 ## Key DS variables (BSS, beyond file end)
 | Offset | Name | Notes |
 |--------|------|-------|
+| DS:032F | smooth_offsets | 4 words: {0x0000, 0x0004, 0x0202, 0xFEFF} — neighbor offsets for first smooth kernel |
+| DS:033D | vga_seg | 0xA000 (VGA framebuffer segment) |
+| DS:034D | prng_mod | 0xCF85 (PRNG modulus constant) |
+| DS:034F | smooth_sel | 0x0001 (kernel selector: val<<4 indexes into offset table at DS:031F) |
 | DS:0351 | pos_x | Camera X, init 1000 |
 | DS:0353 | pos_y | Camera Y, init 1000 |
 | DS:0355 | prev_x | Saved pos_x each frame |
@@ -49,16 +53,18 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Key algorithms ported
 1. **PRNG**: `seed = (seed * 0xAB + 0x2BCD) % 0xCF85`; perturbation = `(half * (seed - 0x67C2)) >> 13`, CBW-clamped to signed byte
 2. **Diamond-square**: uses binary's BX register walk (BL=X, BH=Y, byte-wrapping at 256). Seeds corners, computes 4 edge midpoints + center, recurses on 4 quadrants
-3. **Heightmap post-processing**: smooth buffer1 in-place → slope calc from buffer1 to buffer2/slopemap (`h[i]-h[i+3]+32`, clamp 0..63) → smooth buffer1 in-place again. Heightmap retains fractal heights (0-255 range), slopemap has slope/shading values (0-63)
+3. **Heightmap post-processing**: First smooth uses table-driven asymmetric kernel with offsets {0, +4, +514, -257} loaded from DS:032F-0335 via `[034F]<<4` index → slope calc from buffer1 to buffer2/slopemap (`h[i]-h[i+3]+32`, clamp 0..63) → second smooth uses standard 2×2 box {0, +1, +256, +257}. Heightmap retains fractal heights (0-255 range), slopemap has slope/shading values (0-63)
 4. **Colormap**: same fractal, transformed to palette indices 64-95 (`byte>>3 + 0x40`)
-5. **Renderer**: Comanche-style planar voxel ray caster. Far-to-near iteration using step table for LOD. Horizon buffer tracks highest drawn pixel per column. Height interpolation between adjacent samples. Vertical Gouraud color shading via slopemap with per-scanline color stepping (dispatch table: MOV [DI+off],DH; ADD DX,AX). XCHG buffer tracks color between distance steps for smooth blending
-6. **Palette**: 96 entries extracted from binary at file offset 0x14CA (6-bit VGA DAC values)
+5. **Renderer**: Two-pass architecture:
+   - **Pass 1 (floor plane)**: render_columns (0x659). Draws flat ground texture from colormap using 1/y perspective scaling (DIV ECX). Per row: ray_x/ray_y reloaded from [0364]/[0368], offset by ±step (ray_x -= step centers X sweep, ray_y += step provides forward depth). 256 MOVSB per row with DDA (ADD BX,AX; ADC SI,BP; CMC). 99 rows (ECX=99→1).
+   - **Pass 2 (voxel heights)**: ray_march (0xC1F). Far-to-near with horizon buffer, draws 3D terrain columns over floor. Height interpolation between adjacent heightmap samples. Slopemap Gouraud shading via dispatch table (MOV [DI+off],DH; ADD DX,AX).
+6. **Palette**: 97 entries (indices 0-96) extracted from binary at file offset 0x14CA (6-bit VGA DAC values). Entry 96 = white (compass indicator)
 7. **Sky gradient**: `val = clamp((heading>>>1 + 10) / row) >>> 7, 63)` for 40 rows
 
 ### Rendering constants (verified against binary)
 | Constant | Binary value | Source |
 |----------|-------------|--------|
-| Horizon init | 125 (0x7D) | 0xC32: `66 B8 00 7D 00 7D` |
+| Horizon init | 0x7D00 (row 125 × 256) | 0xC32: `66 B8 00 7D 00 7D` (STOSD fills words with 0x7D00) |
 | Angle offset | 0x4000 | 0x66D: `05 00 40` (ADD AX, 0x4000) |
 | Angle shift | SHR (unsigned) | 0x66A: `C1 E8 03` |
 | Perspective center | heading/SI + 100 | 0xC60: `33 D2 F7 F6 05 64 00` (XOR DX; DIV SI; ADD AX,100) |
@@ -75,8 +81,8 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | gen_heightmap | 0x353 | `genHeightmap()` |
 | subdivide | 0x419 | `subdivide(buf, start, size)` |
 | handle_input | 0x608 | mouse/touch/keyboard handlers |
-| render_columns | 0x659 | `render()` — ray direction setup |
-| unrolled column draw | 0x6D9-0xBD7 | (uses dispatch table approach instead) |
+| render_columns | 0x659 | `render()` — Pass 1 floor plane loop |
+| unrolled column draw | 0x6D9-0xBD7 | floor pixel loop in `render()` (per-col in JS vs unrolled MOVSB) |
 | fill_sky | 0xBDA | sky gradient in `render()` |
 | ray_march | 0xC1F | distance-step loop in `render()` |
 | dispatch table draw | 0xD3E+ | column fill loop with Gouraud shading in `render()` |
@@ -112,7 +118,12 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 
 ### Known differences from binary
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA
-- Binary has two rendering passes (MOVSB-based colormap + dispatch table slopemap); web only has dispatch-table-equivalent pass using slopemap
+- Binary has two rendering passes: Pass 1 (floor plane via MOVSB from colormap, per-pixel ray advance) + Pass 2 (voxel heights via dispatch table with slopemap Gouraud). Web implements both passes with float math
 - Keyboard heading control added for interactivity (binary only uses mouse position)
-- Render buffer is cleared each frame (binary retains previous frame data below row 125)
-- Binary's handle_input CALL 0x125C is overlapping instruction trick (TEST BP,BP; STC; RET) — no-op that preserves AH from INT 33h. Speed check (ADD AH,19h; JNC) sets heading=0xFFFF when mouse present. Web initializes heading=0xFFFF to match.
+- heading=0xFFFF when mouse present (speed check ADD AH,19h at 0x63E). perspScale varies with distance (65535/SI+100). Without mouse, heading=0 and voxel pass produces no visible terrain (perspScale=100 constant, screenY monotonically decreases far-to-near → horizon check always skips)
+- Both smooth passes now match binary in-place behavior (each output feeds subsequent inputs)
+- Sky gradient now at rows 99-139 matching binary (DI continues from floor pass)
+- Gouraud color step sign now matches binary IDIV by negative BP
+- Floor pass now includes forward depth offset: per-row Y = camY + 2048/ECX (binary: ray_y += step per row)
+- Segment assignments in MOVSB pass: DS=colormap [034B], GS=DS segment [0345], ES=DS segment (render buffer destination). Annotation previously had DS/ES swapped.
+- Binary's handle_input CALL 0x125C is overlapping instruction trick (TEST BP,BP; STC; RET) — no-op that preserves AH from INT 33h. Speed check (ADD AH,19h; JNC) sets heading=0xFFFF when mouse present. Web sets heading=0xFFFF to match (required for voxel pass visibility).
