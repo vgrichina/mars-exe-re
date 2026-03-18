@@ -226,23 +226,38 @@ function render() {
     //   Per pixel DDA: ADD BX,AX; ADC SI,BP (advances through map)
     //   DEC CL; JNZ → loop rows
     //
-    // Binary ray_dx = 0x08000000 with heading=0. Per-pixel map advance = step>>16.
-    // For ECX=n: map advance per pixel ≈ 0x08000000 / n / 65536 = 2048/n
-    // Binary has no rotation — camera always faces +Y direction
-    // Binary uses integer positions; ensure no float contamination
+    // Binary DDA: ray_dx = 0x08000000; step = ray_dx / ECX
+    // MOVSB advances SI by 1, then DDA adds (step >> 7) as 16.16 fixed-point
+    // Per-pixel combined map index advance = 1 + (step>>7)/65536 = 1 + 16/ECX
+    // NOT 2048/ECX — that was the 32-bit step >> 16, not the DDA rate
     const iPosX = posX | 0, iPosY = posY | 0;
-    const floorCamX = iPosX / 128;  // Binary: prev_x << 9 >> 16 = prev_x / 128
-    const floorCamY = iPosY / 128;
+    const ray_x = (iPosX << 9) | 0;   // 32-bit fixed-point X
+    const ray_y = (iPosY << 9) | 0;   // 32-bit fixed-point Y
 
     for (let ecx = 99; ecx >= 1; ecx--) {
-        const row = 99 - ecx;  // Row 0 = farthest (ECX=99), Row 98 = nearest (ECX=1)
-        const mapStep = 2048 / ecx;  // map positions per pixel
-        // Binary: ray_x -= step (center sweep in X), ray_y += step (forward depth in Y)
+        const row = 99 - ecx;
+        const step = (0x08000000 / ecx) | 0;  // integer division like binary DIV ECX
+        // ESI = ray_x - step (center), EBP = ray_y + step (forward depth)
+        const esi = (ray_x - step) | 0;
+        const ebp = (ray_y + step) | 0;
+        // Extract starting map index SI = ((EBP>>8)&0xFF00) | ((ESI>>16)&0xFF)
+        const startY = (ebp >>> 16) & 0xFF;
+        const startX = (esi >>> 16) & 0xFF;
+        let si = (startY << 8) | startX;
+        // DDA params: AX = (step>>7)&0xFFFF, BP = (step>>7)>>16
+        const ddaStep = (step >>> 7) | 0;
+        const ddaAX = ddaStep & 0xFFFF;
+        const ddaBP = (ddaStep >>> 16) & 0xFFFF;
+        let bx = esi & 0xFFFF;  // fractional X position
         for (let col = 0; col < W; col++) {
-            const sx = floorCamX + (col - 128) * mapStep;
-            const sy = floorCamY + mapStep;
-            const idx = ((((sy | 0) & 0xFF) << 8) | ((sx | 0) & 0xFF)) & 0xFFFF;
-            renderBuf[row * W + col] = colormap[idx];
+            renderBuf[row * W + col] = colormap[si & 0xFFFF];
+            // MOVSB: SI++ (auto-increment)
+            si = (si + 1) & 0xFFFF;
+            // ADD BX, AX; ADC SI, BP
+            bx = (bx + ddaAX) | 0;
+            const carry = (bx > 0xFFFF) ? 1 : 0;
+            bx &= 0xFFFF;
+            si = (si + ddaBP + carry) & 0xFFFF;
         }
     }
 
