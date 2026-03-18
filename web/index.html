@@ -212,20 +212,20 @@ function genHeightmap() {
 const renderBuf = new Uint8Array(W * H);
 function render() {
     // === Pass 1: Floor plane (render_columns, 0x659) ===
-    // (0x658): DI = 07AA (render buffer start); ECX = 99 (row counter)
+    // (0x659): DI = 07AA (render buffer start); ECX = 99 (row counter)
     // (0x660): ray direction = (-heading >>> 3) + 0x4000; << 13 → ray_dx [0360]
-    // (0x678): ray_x = prev_x << 9 [0364]; ray_y = prev_y << 9 [0368]
-    // (0x690): PUSH DS; GS=[0345](DS seg); DS=[034B](colormap)
+    // (0x67E): ray_x = prev_x << 9 [0364]; ray_y = prev_y << 9 [0368]
+    // (0x694): PUSH DS; GS=[0345](DS seg); DS=[034B](colormap)
     //
-    // Per-row loop (0x6A0):
-    //   step = ray_dx / ECX (0x6A3: DIV ECX)
-    //   ESI = ray_x - step (0x6B4: SUB ESI, EAX)
-    //   EBP = ray_y + step (0x6B7: ADD EBP, EAX)
-    //   SI = ((ESI>>16)&0xFF) | (((EBP>>8)&0xFF00)) = map index (0x6C0-0x6D0)
+    // Per-row loop (0x69E):
+    //   step = ray_dx / ECX (0x6A5: DIV ECX)
+    //   ESI = ray_x - step (0x6B0: SUB ESI, EAX)
+    //   EBP = ray_y + step (0x6B3: ADD EBP, EAX)
+    //   SI = ((ESI>>16)&0xFF) | (((EBP>>8)&0xFF00)) = map index
     //   BP = (step >> 16) - 1; AX = (step >> 7) & 0xFFFF (DDA params)
-    //   256 × MOVSB: copy DS:[SI](colormap) → ES:[DI](render buf) (0x6D9-0xBD7)
+    //   256 × MOVSB: copy DS:[SI](colormap) → ES:[DI](render buf)
     //   Per pixel DDA: ADD BX,AX; ADC SI,BP (advances through map)
-    //   DEC CL; JNZ → loop rows (0xBD8)
+    //   DEC CL; JNZ → loop rows
     //
     // Web: use 2D coordinates with cosA/sinA for rotation support.
     // Binary ray_dx = 0x08000000 with heading=0. Per-pixel map advance = step>>16.
@@ -252,9 +252,9 @@ function render() {
         }
     }
 
-    // === Sky fill (0xBDE, after floor pass) ===
-    // (0xBDE): POP DS; EAX=50505050h; CX=0040h(64 dwords); REP STOSD → fill row 99
-    // (0xBF0): SI=[0359]>>1 + 10; for BL=4..43: val=clamp((SI/BL)>>7, 63)
+    // === Sky fill (0xBDC, after floor pass) ===
+    // (0xBDC): POP DS; EAX=50505050h; CX=0040h(64 dwords); REP STOSD → fill row 99
+    // (0xBEE): SI=[0359]>>1 + 10; for BL=4..43: val=clamp((SI/BL)>>7, 63)
     // Binary sky at rows 99-139 (DI continues from floor pass, not reset)
     // Row 99 = solid 0x50, rows 100-139 = gradient
     const skyBase = 99;
@@ -268,12 +268,12 @@ function render() {
     }
 
     // === Pass 2: Voxel heightmap (ray_march, 0xC1F) ===
-    // (0xC28): FS=[0347](heightmap); GS=[0349](slopemap)
-    // (0xC30): fill horizon buf DS:03AA with 0x7D00 (256 words)
-    // (0xC40): fill prevColor buf DS:05AA with 0 (256 words)
-    // (0xC4C): [03A0] = 0x78 (120 = word offset, step table indices 60→1)
+    // (0xC1F): FS=[0347](heightmap); GS=[0349](slopemap)
+    // (0xC27): fill horizon buf DS:03AA with 0x7D00 (256 words)
+    // (0xC37): fill prevColor buf DS:05AA with 0 (256 words)
+    // (0xC42): [03A0] = 0x78 (120 = word offset, step table indices 60→1)
     //
-    // Voxel pass sweeps +X from camera. Binary (0xCA0):
+    // Voxel pass sweeps +X from camera. Binary (0xC9D):
     //   ECX = prev_x << 12; ECX -= step_size << 7 (center sweep)
     //   BH = prev_y >> 4 (map Y); BL = from ECX (map X)
     // Web: use cosA/sinA for rotation with perpOffset = (col-128)*dist/64
@@ -281,25 +281,25 @@ function render() {
     const voxCamY = ((((posY | 0) / 16) % 256) + 256) % 256;
 
     const horizon = new Int32Array(W);
-    horizon.fill(0x7D00);  // (0xC30): EAX=7D007D00, REP STOSD
-    const prevColor = new Int16Array(W);  // (0xC40): zeroed
+    horizon.fill(0x7D00);  // (0xC27): EAX=7D007D00, REP STOSD
+    const prevColor = new Int16Array(W);  // (0xC37): zeroed
 
-    // (0xC4C): distance counter [03A0]=120, decrements by 2 → step indices 60..1
+    // (0xC42): distance counter [03A0]=120, decrements by 2 → step indices 60..1
     for (let si = stepTable.length - 1; si >= 1; si--) {
         const dist = stepTable[si];
 
-        // (0xC54): SI = stepTable[counter] << 4 | (0xF ^ (prev_y & 0xF))
+        // (0xC50): SI = stepTable[counter] << 4 | (0xF ^ (prev_y & 0xF))
         const SI = (dist << 4) | (15 - (posY & 0xF));
 
-        // (0xC60): perspScale [03A2] = [0359] / SI + 100
-        // (0xC84): special case SI<=2: perspScale=0x7D00, heightScale=0
+        // (0xC5D): perspScale [03A2] = [0359] / SI + 100
+        // (0xC77): special case SI<=2: perspScale=0x7D00, heightScale=0
         const perspScale = (SI <= 2) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
 
-        // (0xC90): heightScale [03A4] = 0x10000 / SI
+        // (0xC8C): heightScale [03A4] = 0x10000 / SI
         const heightScale = (SI <= 2) ? 0 : (0x10000 / SI) | 0;
 
         for (let col = 0; col < W; col++) {
-            // (0xCA0-0xCDE): ray position. Binary sweeps +X from prev_x.
+            // (0xC9D-0xCD8): ray position. Binary sweeps +X from prev_x.
             // step_size [03A6] = SI << 6. Per column: step_size/65536 map units.
             // Web: perpOffset = (col-128) * dist / 64
             const perpOffset = (col - 128) * dist / 64;
@@ -314,7 +314,7 @@ function render() {
             const mapIdx = ((sampleYi & 0xFF) << 8) | (sampleXi & 0xFF);
             const nextIdx = ((sampleYi & 0xFF) << 8) | ((sampleXi + 1) & 0xFF);
 
-            // (0xCDE): Height interpolation
+            // (0xCD8): Height interpolation
             // SHR CX,1; MOV AL,FS:[BX+1]; XOR AH,AH; SUB AL,FS:[BX]; SBB AH,0
             // IMUL CX; SHRD AX,DX,7; ADD AH,FS:[BX]
             const h0 = heightmap[mapIdx];
@@ -325,21 +325,21 @@ function render() {
             const hShifted = (hProduct >> 7) | 0;
             const interpH = (((hShifted >> 8) + h0) & 0xFF);
 
-            // (0xCF5): MUL [03A4] → projected height in DX
-            // (0xCF9): DI = [03A2] - DX → screenY = perspScale - projected
+            // (0xCEF): MUL [03A4] → projected height in DX
+            // (0xCF3): DI = [03A2] - DX → screenY = perspScale - projected
             let screenY = (perspScale - ((interpH << 8) * heightScale >>> 16)) | 0;
 
-            // (0xCFE): clamp: if screenY < 0 → -1 (JNS+3; MOV DI,FFFF)
-            // (0xD03): if screenY >= 200 → 199 (CMP DI,C8; JL+3; MOV DI,C7)
+            // (0xCF9): clamp: if screenY < 0 → -1 (JNS+3; MOV DI,FFFF)
+            // (0xCFE): if screenY >= 200 → 199 (CMP DI,C8; JL+3; MOV DI,C7)
             if (screenY < 0) screenY = -1;
             if (screenY >= H) screenY = H - 1;
 
-            // (0xD08): BP = [SI+03AA]; [SI+03AA] = DI
+            // (0xD07): BP = [SI+03AA]; [SI+03AA] = DI
             const oldHorizon = horizon[col];
             horizon[col] = screenY;
 
-            // (0xD10): BP -= DI (column height = oldHorizon - screenY)
-            // (0xD18): JNS skip — skip when BP >= 0 (ascending terrain)
+            // (0xD0F): BP -= DI (column height = oldHorizon - screenY)
+            // (0xD11): JNS skip — skip when BP >= 0 (ascending terrain)
             // Only draw when BP < 0 (screenY > oldHorizon = terrain descends)
             const columnHeight = (oldHorizon - screenY) | 0;
             if (columnHeight >= 0) continue;
@@ -349,7 +349,7 @@ function render() {
             const drawEnd = screenY < 0 ? 0 : (screenY > H ? H : screenY);
             if (drawStart >= drawEnd) continue;
 
-            // (0xD20): Color interpolation from slopemap (GS segment)
+            // (0xD1C): Color interpolation from slopemap (GS segment)
             // MOV AL,GS:[BX+1]; SUB AL,GS:[BX]; IMUL CH; SHL AX,1; ADD AH,GS:[BX]
             const CH = (halfFrac >>> 8) & 0xFF;
             const c0 = slopemap[mapIdx];
@@ -360,12 +360,12 @@ function render() {
             const colorHi = ((cProd >> 8) + c0) & 0xFF;
             const colorAX = ((colorHi << 8) | (cProd & 0xFF)) & 0xFFFF;
 
-            // (0xD30): XCHG AX,[SI+05AA] — swap current with prev color
+            // (0xD2C): XCHG AX,[SI+05AA] — swap current with prev color
             const oldColor = prevColor[col];
             prevColor[col] = colorAX;
 
-            // (0xD34): AX = oldColor - newColor; CWD; IDIV BP → color step
-            // (0xD3A): POP DX (old color = start value)
+            // (0xD33): AX = oldColor - newColor; CWD; IDIV BP → color step
+            // (0xD36): POP DX (old color = start value)
             // Binary IDIV BP where BP is negative (oldHorizon-screenY < 0),
             // so colorStep = (prev-curr)/negative = -(prev-curr)/|height|
             const negHeight = -columnHeight;  // positive count of pixels
@@ -373,7 +373,7 @@ function render() {
             const colorStep = (negHeight > 0) ? ((-colorDiff / negHeight) | 0) : 0;
             let drawColor = oldColor;
 
-            // (0xD3E+): Dispatch table draw: MOV [DI+offset],DH; ADD DX,AX
+            // (0xD3A+): Dispatch table draw: MOV [DI+offset],DH; ADD DX,AX
             for (let y = drawStart; y < drawEnd; y++) {
                 renderBuf[y * W + col] = (drawColor >> 8) & 0xFF;
                 drawColor = (drawColor + colorStep) | 0;

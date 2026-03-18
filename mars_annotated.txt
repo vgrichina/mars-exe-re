@@ -232,41 +232,41 @@
 ;   if half > 1: recurse on 4 sub-squares
 ;   ret
             8bec 8b5e 048b 4e02 d1e9 268a 1702  ;   BP=SP | BX=start | CX=size | CX>>=1 | read corner
-00000420: d98b fb02 d926 803d ff75 4432 f626 0217  ; midpoint calc | if [ES:DI]==FF (unset): compute
-00000430: 80d6 00d1 ea8a eab8 ab00 f7e6 05cd 2b83  ; PRNG for random perturbation
-00000440: d200 f736 4d03 8bf2 81ea c267 8ac1 32e4  ; mod | center offset | height calc
-00000450: f7ea 8ac4 8ae2 c1f8 0598 02c5 80d4 0078  ; scale perturbation | add base height | clamp
-00000460: 093d fe00 7606 b0fe eb02 32c0 2688 0526  ; clamp to 0..254 | store midpoint
-00000470: 8a17 02f9 8bfb 02f9 2680 3dff 7544 32f6  ; next edge midpoint (similar pattern)
-00000480: 2602 1780 d600 d1ea 8aea b8ab 00f7 e605  ; PRNG + perturbation
-00000490: cd2b 83d2 00f7 364d 038b f281 eac2 678a  ;
-000004a0: c132 e4f7 ea8a c48a e2c1 f805 9802 c580  ;
-000004b0: d400 7809 3dfe 0076 06b0 feeb 0232 c026  ; clamp | store
-000004c0: 8805 268a 172a d98b fb2a d926 803d ff75  ; third edge midpoint
-000004d0: 4432 f626 0217 80d6 00d1 ea8aea b8ab 00f7  ;
-000004e0: e605 cd2b 83d2 00f7 364d 038b f281 eac2  ;
-000004f0: 678a c132 e4f7 ea8a c48a e2c1 f805 9802  ;
-00000500: c580 d400 7809 3dfe 0076 06b0 feeb 0232  ;
-00000510: c026 8805 268a 172a f98b fb2a f926 803d  ; fourth edge midpoint
-00000520: ff75 4432 f626 0217 80d6 00d1 ea8a eab8  ;
-00000530: ab00 f7e6 05cd 2b83 d200 f736 4d03 8bf2  ;
-00000540: 81ea c267 8ac1 32e4 f7ea 8ac4 8ae2 c1f8  ;
-00000550: 0598 02c5 80d4 0078 093d fe00 7606 b0fe  ;
-00000560: eb02 32c0 2688 0526 8a17 32f6 02d9 02d9  ; center point: avg of 4 edges
-00000570: 2602 1780 d600 02f9 02f9 2602 1780 d600  ;
-00000580: 2ad9 2ad9 2602 1780 d600 c1ea 028a eab8  ;
-00000590: ab00 f7e6 05cd 2b83 d200 f736 4d03 8bf2  ;
-000005a0: 81ea c267 8ac1 32e4 f7ea 8ac4 8ae2 c1f8  ;
-000005b0: 0598 02c5 80d4 0078 093d fe00 7606 b0fe  ;
-000005c0: eb02 32c0                                 ; clamp center
+00000427: d98b fb02 d926 803d ff75 4432 f626 0217  ; midpoint calc | if [ES:DI]==FF (unset): compute
+00000437: 80d6 00d1 ea8a eab8 ab00 f7e6 05cd 2b83  ; PRNG for random perturbation
+00000447: d200 f736 4d03 8bf2 81ea c267 8ac1 32e4  ; mod | center offset | height calc
+00000457: f7ea 8ac4 8ae2 c1f8 0598 02c5 80d4 0078  ; scale perturbation | add base height | clamp
+00000467: 093d fe00 7606 b0fe eb02 32c0 2688 0526  ; clamp to 0..254 | store midpoint
+00000477: 8a17 02f9 8bfb 02f9 2680 3dff 7544 32f6  ; next edge midpoint (similar pattern)
+00000487: 2602 1780 d600 d1ea 8aea b8ab 00f7 e605  ; PRNG + perturbation
+00000497: cd2b 83d2 00f7 364d 038b f281 eac2 678a  ;
+000004a7: c132 e4f7 ea8a c48a e2c1 f805 9802 c580  ;
+000004b7: d400 7809 3dfe 0076 06b0 feeb 0232 c026  ; clamp | store
+000004c7: 8805 268a 172a d98b fb2a d926 803d ff75  ; third edge midpoint
+000004d7: 4432 f626 0217 80d6 00d1 ea8aea b8ab 00f7  ;
+000004e8: e605 cd2b 83d2 00f7 364d 038b f281 eac2  ;
+000004f8: 678a c132 e4f7 ea8a c48a e2c1 f805 9802  ;
+00000508: c580 d400 7809 3dfe 0076 06b0 feeb 0232  ;
+00000518: c026 8805 268a 172a f98b fb2a f926 803d  ; fourth edge midpoint
+00000528: ff75 4432 f626 0217 80d6 00d1 ea8a eab8  ;
+00000538: ab00 f7e6 05cd 2b83 d200 f736 4d03 8bf2  ;
+00000548: 81ea c267 8ac1 32e4 f7ea 8ac4 8ae2 c1f8  ;
+00000558: 0598 02c5 80d4 0078 093d fe00 7606 b0fe  ;
+00000568: eb02 32c0 2688 0526 8a17 32f6 02d9 02d9  ; center point: avg of 4 edges
+00000578: 2602 1780 d600 02f9 02f9 2602 1780 d600  ;
+00000588: 2ad9 2ad9 2602 1780 d600 c1ea 028a eab8  ;
+00000598: ab00 f7e6 05cd 2b83 d200 f736 4d03 8bf2  ;
+000005a8: 81ea c267 8ac1 32e4 f7ea 8ac4 8ae2 c1f8  ;
+000005b8: 0598 02c5 80d4 0078 093d fe00 7606 b0fe  ;
+000005c8: eb02 32c0                                 ; clamp center
 
 ; --- recursive calls (if size > 2) ---
 ;   if cl == 1: return
 ;   push/call subdivide for 4 sub-quadrants
                   02d9 2af9 2688 0780 f901 742f  ;   store center | if half==1: ret
-000005d0: 32ed 2ad9 2af9 5351 e836 fe8b ec8a 4e00  ; push args | call subdivide(quad1)
-000005e0: 004e 02e8 2bfe 8bec 8a4e 0000 4e03 e820  ; call subdivide(quad2) | call subdivide(quad3)
-000005f0: fe8b ec8a 4e00 284e 02e8 15fe 83c4 04c3  ; call subdivide(quad4) | cleanup | ret
+000005d8: 32ed 2ad9 2af9 5351 e836 fe8b ec8a 4e00  ; push args | call subdivide(quad1)
+000005e8: 004e 02e8 2bfe 8bec 8a4e 0000 4e03 e820  ; call subdivide(quad2) | call subdivide(quad3)
+000005f8: fe8b ec8a 4e00 284e 02e8 15fe 83c4 04c3  ; call subdivide(quad4) | cleanup | ret
 
 ; ============================================================================
 ; handle_input — CS:0408 (file 0x608)
@@ -348,8 +348,8 @@
 000006d0: 0bf5 668b e866 c1ed 10                    ; combine | save height
 
 ; ============================================================================
-; UNROLLED FLOOR DRAW — CS:04D9 (file 0x6D9)
-; 200 iterations: MOVSB + ADD BX,AX + ADC SI,BP + CMC
+; UNROLLED FLOOR DRAW — CS:04DA (file 0x6DA)
+; 256 iterations: MOVSB + ADD BX,AX + ADC SI,BP + CMC
 ; Pattern: A4 03 D8 13 F5 repeating
 ;   A4 = MOVSB: copy DS:[SI] (colormap) → ES:[DI] (render buf), inc SI, inc DI
 ;   03 D8 = ADD BX, AX (advance fractional ray position)
@@ -357,7 +357,7 @@
 ;   F5 = CMC (complement carry for next iteration)
 ; Each pixel samples a different colormap position along the ray.
 ; DI starts at 07AA (render buffer), increments by 1 per pixel.
-; 200 × 5 = 1000 bytes (0x6D9 to 0xBD7)
+; 256 × 5 = 1280 bytes (0x6DA to 0xBD9)
 ; ============================================================================
                               4da4 03d8 13f5 a4  ;                             start unrolled draw
 000006e0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ; scanline draw × 3
@@ -372,82 +372,82 @@
 00000770: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ; F5 = CMC (complement carry)
 00000780: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
 00000790: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ; Together: copy pixel + advance through heightmap
-00000800: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ; with fixed-point stepping (carry propagation)
-00000810: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000820: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000830: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000840: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000850: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000860: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000870: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000880: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000890: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-000008a0: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-000008b0: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-000008c0: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-000008d0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-000008e0: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-000008f0: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000900: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000910: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000920: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000930: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000940: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000950: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000960: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000970: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000980: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000990: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-000009a0: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-000009b0: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-000009c0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-000009d0: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-000009e0: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-000009f0: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000a00: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000a10: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000a20: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000a30: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000a40: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000a50: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000a60: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000a70: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000a80: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000a90: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000aa0: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000ab0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000ac0: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000ad0: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000ae0: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000af0: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000b00: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000b10: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000b20: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000b30: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000b40: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000b50: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000b60: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000b70: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000b80: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
-00000b90: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
-00000ba0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
-00000bb0: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
-00000bc0: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
-00000bd0: f5a4 03d8 13f5 a4                         ; end of 200-iteration unrolled loop
+000007e6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ; with fixed-point stepping (carry propagation)
+000007f6: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000806: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000816: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000826: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000836: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000846: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000856: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000866: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000876: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000886: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000896: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+000008a6: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+000008b6: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+000008c6: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+000008d6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+000008e6: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+000008f6: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000906: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000916: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000926: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000936: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000946: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000956: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000966: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000976: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000986: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000996: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+000009a6: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+000009b6: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+000009c6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+000009d6: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+000009e6: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+000009f6: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000a06: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000a16: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000a26: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000a36: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000a46: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000a56: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000a66: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000a76: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000a86: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000a96: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000aa6: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000ab6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000ac6: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000ad6: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000ae6: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000af6: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000b06: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000b16: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000b26: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000b36: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000b46: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000b56: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000b66: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ;
+00000b76: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
+00000b86: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
+00000b96: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
+00000ba6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
+00000bb6: f5a4 03d8 13f5 a4                         ; end of 200-iteration unrolled loop
 
 ; ============================================================================
-; POST-COLUMN + OUTER LOOP — CS:09D7 (file 0xBD7)
+; POST-COLUMN + OUTER LOOP — CS:09D5 (file 0xBD5)
 ; ============================================================================
 ;   dec cl; jnz back_to_column_start (0x6D0-ish, ~1286 bytes back)
 ;   pop ds
 ;   fill sky: EAX=50505050h, CX=0040h, REP STOSD → fill 256 bytes (1 row) with 0x50
 ;   compute sky gradient from [0359] heading
                         03d8 13f5 a4fe c90f  ;                             last pixels | dec cl
-00000be0: 85c1 fa1f 66b8 5050 5050 b940 00f3 66ab  ; jnz loop | pop ds | EAX=50505050 | fill sky buffer
-00000bf0: 8b36 5903 d1ee 83c6 0abb 0400 8bc6 33d2  ; SI=[0359]>>1 + 10 | BL=4 | AX=SI
-00000c00: f7f3 c1e8 073d 3f00 7602 b03f 8ae0 8ad0  ; AX/BX | >>7 | clamp 63 | AH=AL=DL
-00000c10: 66c1 e010 8ac2 8ae0 b940 00f3 66ab fec3  ; pack into EAX | CX=64 REP STOSD | BL++
-00000c20: 80fb 2c75 d7c3                            ; if BL<44: loop sky gradient rows | ret
+00000bd9: 85c1 fa1f 66b8 5050 5050 b940 00f3 66ab  ; jnz loop | pop ds | EAX=50505050 | fill sky buffer
+00000be9: 8b36 5903 d1ee 83c6 0abb 0400 8bc6 33d2  ; SI=[0359]>>1 + 10 | BL=4 | AX=SI
+00000bf9: f7f3 c1e8 073d 3f00 7602 b03f 8ae0 8ad0  ; AX/BX | >>7 | clamp 63 | AH=AL=DL
+00000c09: 66c1 e010 8ac2 8ae0 b940 00f3 66ab fec3  ; pack into EAX | CX=64 REP STOSD | BL++
+00000c19: 80fb 2c75 d7c3                            ; if BL<44: loop sky gradient rows | ret
 
 ; ============================================================================
 ; ray_march — CS:0A1F (file 0xC1F)
@@ -465,23 +465,23 @@
 ;   Uses jump table at DS:0000 (file 0x12C0) to enter unrolled draw
 ;   at correct scanline based on column height
                   8e26 47038e 2e49 03  ;                     FS=[0347] GS=[0349]
-00000c30: 66b8 007d 007d bfaa 03b9 8000 f366 ab66  ; EAX=7D007D00 | DI=03AA | fill 128 dwords
-00000c40: 33c0 bfaa 05b9 8000 f366 abc7 06a0 0378  ; EAX=0 | DI=05AA | fill 128 dwords | [03A0]=120
-00000c50: 008b 36a0 038b b490 01c1 e604 a157 0325  ; SI=[03A0] | load step_table[SI] | <<4 | AX=heading
-00000c60: 0f00 340f 03f0 a159 0333 d2f7 f605 6400  ; &0F ^ 0F | +SI | AX=[0359] | /SI | +100
-00000c70: a3a2 0366 33c0 8bc6 66c1 e006 66a3 a603  ; [03A2]=AX | EAX=SI<<6 | [03A6]=EAX
-00000c80: 833e a003 0275 0ec7 06a2 03007d c706 a403  ; if [03A0]==2: [03A2]=7D00, [03A4]=0
-00000c90: 0000 eb0a 33c0 ba01 00f7 f6a3 a403        ; else: [03A4]=10000h/SI
+00000c27: 66b8 007d 007d bfaa 03b9 8000 f366 ab66  ; EAX=7D007D00 | DI=03AA | fill 128 dwords
+00000c37: 33c0 bfaa 05b9 8000 f366 abc7 06a0 0378  ; EAX=0 | DI=05AA | fill 128 dwords | [03A0]=120
+00000c47: 008b 36a0 038b b490 01c1 e604 a157 0325  ; SI=[03A0] | load step_table[SI] | <<4 | AX=heading
+00000c57: 0f00 340f 03f0 a159 0333 d2f7 f605 6400  ; &0F ^ 0F | +SI | AX=[0359] | /SI | +100
+00000c67: a3a2 0366 33c0 8bc6 66c1 e006 66a3 a603  ; [03A2]=AX | EAX=SI<<6 | [03A6]=EAX
+00000c77: 833e a003 0275 0ec7 06a2 03007d c706 a403  ; if [03A0]==2: [03A2]=7D00, [03A4]=0
+00000c88: 0000 eb0a 33c0 ba01 00f7 f6a3 a403        ; else: [03A4]=10000h/SI
 
 ; --- ray stepping setup ---
 ;   compute initial ray position in 32-bit fixed point
 ;   DI = direction index, SI = step counter
 000006a0: ...  (continued from render_columns above)
                                     6633 c98b  ;                                     ECX=0
-00000ca0: 0e55 0366 c1e1 0c66 a1a6 0366 c1e0 0766  ; CX=[0355] | <<12 | EAX=[03A6] | <<7
-00000cb0: 2bc8 8b16 5703 c1e2 0466 8bd9 66c1 eb10  ; ECX-=EAX | DX=[0357]<<4 | EBX=ECX>>16
-00000cc0: 8afe 8bc6 c1e8 0402 f8d1 e9be fe01 c706  ; extract indices | >>4 | SI=01FE | [0364]=07AA
-00000cd0: 6403 aa07 d1e1 030e a603 121e a803        ; <<1 | add [03A6] | adc [03A8]
+00000c9a: 0e55 0366 c1e1 0c66 a1a6 0366 c1e0 0766  ; CX=[0355] | <<12 | EAX=[03A6] | <<7
+00000caa: 2bc8 8b16 5703 c1e2 0466 8bd9 66c1 eb10  ; ECX-=EAX | DX=[0357]<<4 | EBX=ECX>>16
+00000cba: 8afe 8bc6 c1e8 0402 f8d1 e9be fe01 c706  ; extract indices | >>4 | SI=01FE | [0364]=07AA
+00000cca: 6403 aa07 d1e1 030e a603 121e a803        ; <<1 | add [03A6] | adc [03A8]
 
 ; --- per-distance-step inner loop ---
 ;   sample heightmap: FS:[BH:BL mapped to 256×256]
@@ -519,16 +519,16 @@
 ;   SHL BP, 1                     word offset into jump table
 ;   JMP [DS:BP+0190]              dispatch into unrolled draw
                                           d1e9  ;                                       SHR CX,1
-00000ce0: 648a 4701 32e4 642a 0780 dc00 f7e9 0fac  ; FS:[BX+1] | XOR AH | SUB FS:[BX] | SBB AH,0 | IMUL CX | SHRD
-00000cf0: d007 6402 27f7 26a4 038b 3ea2 032b fa79  ; AX,DX,7 | ADD AH,FS:[BX] | MUL [03A4] | DI=[03A2]-DX | JNS
-00000d00: 03bf ffff 81ff c800 7c03 bfc7 008b acaa  ; clamp 0..199 | BP=[SI+03AA] old horizon
-00000d10: 0389 bcaa 032b ef0f 8905 05c1 e708 033e  ; [SI+03AA]=DI | BP-=DI | JNS skip | DI<<=8 | DI+=[0364]
-00000d20: 6403 658a 4701 652a 07f6 edd1 e065 0227  ; GS:[BX+1] | SUB GS:[BX] | IMUL CH | SHL AX,1 | ADD AH,GS:[BX]
-00000d30: 8bd0 8784 aa05 502b c299 f7fd 5ad1 e53e  ; DX=AX | XCHG [SI+05AA] | PUSH | SUB | CWD | IDIV BP | POP DX | SHL BP
-00000d40: ffa6 9001                                 ; JMP [DS:BP+0190] → dispatch table draw
+00000cda: 648a 4701 32e4 642a 0780 dc00 f7e9 0fac  ; FS:[BX+1] | XOR AH | SUB FS:[BX] | SBB AH,0 | IMUL CX | SHRD
+00000cea: d007 6402 27f7 26a4 038b 3ea2 032b fa79  ; AX,DX,7 | ADD AH,FS:[BX] | MUL [03A4] | DI=[03A2]-DX | JNS
+00000cfa: 03bf ffff 81ff c800 7c03 bfc7 008b acaa  ; clamp 0..199 | BP=[SI+03AA] old horizon
+00000d0a: 0389 bcaa 032b ef0f 8905 05c1 e708 033e  ; [SI+03AA]=DI | BP-=DI | JNS skip | DI<<=8 | DI+=[0364]
+00000d1a: 6403 658a 4701 652a 07f6 edd1 e065 0227  ; GS:[BX+1] | SUB GS:[BX] | IMUL CH | SHL AX,1 | ADD AH,GS:[BX]
+00000d2a: 8bd0 8784 aa05 502b c299 f7fd 5ad1 e53e  ; DX=AX | XCHG [SI+05AA] | PUSH | SUB | CWD | IDIV BP | POP DX | SHL BP
+00000d3a: ffa6 9001                                 ; JMP [DS:BP+0190] → dispatch table draw
 
 ; ============================================================================
-; COLUMN DRAW DISPATCH TABLE TARGET AREA — CS:0B3E+ (file 0xD3E+)
+; COLUMN DRAW DISPATCH TABLE TARGET AREA — CS:0B3A+ (file 0xD3A+)
 ; Entered via jump table. Each entry: MOV [DI+row_offset], DH; ADD DX, AX
 ; Draws N scanlines of a terrain column, then falls through to loop end
 ; ============================================================================
@@ -536,80 +536,80 @@
 ;            03 D0       = add dx, ax          (advance color interpolation)
 ;   Row offsets increase by 0x100 (256 bytes = one row in render buffer)
               88b5 0039 03d0 88b5 003a 03d0  ;               row 57: [DI+3900] | row 58: [DI+3A00]
-00000d50: 88b5 003b 03d0 88b5 003c 03d0 88b5 003d  ; row 59 | row 60 | row 61
-00000d60: 03d0 88b5 003e 03d0 88b5 003f 03d0 88b5  ; row 62 | row 63 |
-00000d70: 0040 03d0 88b5 0041 03d0 88b5 0042 03d0  ; row 64 | row 65 | row 66
-00000d80: 88b5 0043 03d0 88b5 0044 03d0 88b5 0045  ; row 67 | row 68 | row 69
-00000d90: 03d0 88b5 0046 03d0 88b5 0047 03d0 88b5  ; row 70 | row 71 |
-00000da0: 0048 03d0 88b5 0049 03d0 88b5 004a 03d0  ; row 72 | row 73 | row 74
-00000db0: 88b5 004b 03d0 88b5 004c 03d0 88b5 004d  ; row 75 | row 76 | row 77
-00000dc0: 03d0 88b5 004e 03d0 88b5 004f 03d0 88b5  ; row 78 | row 79 |
-00000dd0: 0050 03d0 88b5 0051 03d0 88b5 0052 03d0  ; row 80 | row 81 | row 82
-00000de0: 88b5 0053 03d0 88b5 0054 03d0 88b5 0055  ; row 83 | row 84 | row 85
-00000df0: 03d0 88b5 0056 03d0 88b5 0057 03d0 88b5  ; row 86 | row 87 |
-00000e00: 0058 03d0 88b5 0059 03d0 88b5 005a 03d0  ; row 88 | row 89 | row 90
-00000e10: 88b5 005b 03d0 88b5 005c 03d0 88b5 005d  ; row 91 | row 92 | row 93
-00000e20: 03d0 88b5 005e 03d0 88b5 005f 03d0 88b5  ; row 94 | row 95 |
-00000e30: 0060 03d0 88b5 0061 03d0 88b5 0062 03d0  ; row 96 | row 97 | row 98
-00000e40: 88b5 0063 03d0 88b5 0064 03d0 88b5 0065  ; row 99 | row 100 | row 101
-00000e50: 03d0 88b5 0066 03d0 88b5 0067 03d0 88b5  ; row 102 | row 103 |
-00000e60: 0068 03d0 88b5 0069 03d0 88b5 006a 03d0  ; row 104 | row 105 | row 106
-00000e70: 88b5 006b 03d0 88b5 006c 03d0 88b5 006d  ; row 107 | row 108 | row 109
-00000e80: 03d0 88b5 006e 03d0 88b5 006f 03d0 88b5  ; row 110 | row 111 |
-00000e90: 0070 03d0 88b5 0071 03d0 88b5 0072 03d0  ; row 112 | row 113 | row 114
-00000ea0: 88b5 0073 03d0 88b5 0074 03d0 88b5 0075  ; row 115 | row 116 | row 117
-00000eb0: 03d0 88b5 0076 03d0 88b5 0077 03d0 88b5  ; row 118 | row 119 |
-00000ec0: 0078 03d0 88b5 0079 03d0 88b5 007a 03d0  ; row 120 | row 121 | row 122
-00000ed0: 88b5 007b 03d0 88b5 007c 03d0 88b5 007d  ; row 123 | row 124 | row 125
-00000ee0: 03d0 88b5 007e 03d0 88b5 007f 03d0 88b5  ; row 126 | row 127 |
-00000ef0: 0080 03d0 88b5 0081 03d0 88b5 0082 03d0  ; row 128 | row 129 | row 130
-00000f00: 88b5 0083 03d0 88b5 0084 03d0 88b5 0085  ; row 131 | row 132 | row 133
-00000f10: 03d0 88b5 0086 03d0 88b5 0087 03d0 88b5  ; row 134 | row 135 |
-00000f20: 0088 03d0 88b5 0089 03d0 88b5 008a 03d0  ; row 136 | row 137 | row 138
-00000f30: 88b5 008b 03d0 88b5 008c 03d0 88b5 008d  ; row 139 | row 140 | row 141
-00000f40: 03d0 88b5 008e 03d0 88b5 008f 03d0 88b5  ; row 142 | row 143 |
-00000f50: 0090 03d0 88b5 0091 03d0 88b5 0092 03d0  ; row 144 | row 145 | row 146
-00000f60: 88b5 0093 03d0 88b5 0094 03d0 88b5 0095  ; row 147 | row 148 | row 149
-00000f70: 03d0 88b5 0096 03d0 88b5 0097 03d0 88b5  ; row 150 | row 151 |
-00000f80: 0098 03d0 88b5 0099 03d0 88b5 009a 03d0  ; row 152 | row 153 | row 154
-00000f90: 88b5 009b 03d0 88b5 009c 03d0 88b5 009d  ; row 155 | row 156 | row 157
-00000fa0: 03d0 88b5 009e 03d0 88b5 009f 03d0 88b5  ; row 158 | row 159 |
-00000fb0: 00a0 03d0 88b5 00a1 03d0 88b5 00a2 03d0  ; row 160 | row 161 | row 162
-00000fc0: 88b5 00a3 03d0 88b5 00a4 03d0 88b5 00a5  ; row 163 | row 164 | row 165
-00000fd0: 03d0 88b5 00a6 03d0 88b5 00a7 03d0 88b5  ; row 166 | row 167 |
-00000fe0: 00a8 03d0 88b5 00a9 03d0 88b5 00aa 03d0  ; row 168 | row 169 | row 170
-00000ff0: 88b5 00ab 03d0 88b5 00ac 03d0 88b5 00ad  ; row 171 | row 172 | row 173
-00001000: 03d0 88b5 00ae 03d0 88b5 00af 03d0 88b5  ; row 174 | row 175 |
-00001010: 00b0 03d0 88b5 00b1 03d0 88b5 00b2 03d0  ; row 176 | row 177 | row 178
-00001020: 88b5 00b3 03d0 88b5 00b4 03d0 88b5 00b5  ; row 179 | row 180 | row 181
-00001030: 03d0 88b5 00b6 03d0 88b5 00b7 03d0 88b5  ; row 182 | row 183 |
-00001040: 00b8 03d0 88b5 00b9 03d0 88b5 00ba 03d0  ; row 184 | row 185 | row 186
-00001050: 88b5 00bb 03d0 88b5 00bc 03d0 88b5 00bd  ; row 187 | row 188 | row 189
-00001060: 03d0 88b5 00be 03d0 88b5 00bf 03d0 88b5  ; row 190 | row 191 |
-00001070: 00c0 03d0 88b5 00c1 03d0 88b5 00c2 03d0  ; row 192 | row 193 | row 194
-00001080: 88b5 00c3 03d0 88b5 00c4 03d0 88b5 00c5  ; row 195 | row 196 | row 197
-00001090: 03d0 88b5 00c6 03d0 88b5 00c7 03d0 88b5  ; row 198 | row 199 (last) |
-000010a0: 00c8 03d0 88b5 00c9 03d0 88b5 00ca 03d0  ; (rows 200+, overflow entries)
-000010b0: 88b5 00cb 03d0 88b5 00cc 03d0 88b5 00cd  ;
-000010c0: 03d0 88b5 00ce 03d0 88b5 00cf 03d0 88b5  ;
-000010d0: 00d0 03d0 88b5 00d1 03d0 88b5 00d2 03d0  ;
-000010e0: 88b5 00d3 03d0 88b5 00d4 03d0 88b5 00d5  ;
-000010f0: 03d0 88b5 00d6 03d0 88b5 00d7 03d0 88b5  ;
-00001100: 00d8 03d0 88b5 00d9 03d0 88b5 00da 03d0  ;
-00001110: 88b5 00db 03d0 88b5 00dc 03d0 88b5 00dd  ;
-00001120: 03d0 88b5 00de 03d0 88b5 00df 03d0 88b5  ;
-00001130: 00e0 03d0 88b5 00e1 03d0 88b5 00e2 03d0  ;
-00001140: 88b5 00e3 03d0 88b5 00e4 03d0 88b5 00e5  ;
-00001150: 03d0 88b5 00e6 03d0 88b5 00e7 03d0 88b5  ;
-00001160: 00e8 03d0 88b5 00e9 03d0 88b5 00ea 03d0  ;
-00001170: 88b5 00eb 03d0 88b5 00ec 03d0 88b5 00ed  ;
-00001180: 03d0 88b5 00ee 03d0 88b5 00ef 03d0 88b5  ;
-00001190: 00f0 03d0 88b5 00f1 03d0 88b5 00f2 03d0  ;
-000011a0: 88b5 00f3 03d0 88b5 00f4 03d0 88b5 00f5  ;
-000011b0: 03d0 88b5 00f6 03d0 88b5 00f7 03d0 88b5  ;
-000011c0: 00f8 03d0 88b5 00f9 03d0 88b5 00fa 03d0  ;
-000011d0: 88b5 00fb 03d0 88b5 00fc 03d0 88b5 00fd  ;
-000011e0: 03d0 88b5 00fe 03d0 88b5 00ff 03d0       ; row 255 (last dispatch entry)
+00000d4a: 88b5 003b 03d0 88b5 003c 03d0 88b5 003d  ; row 59 | row 60 | row 61
+00000d5a: 03d0 88b5 003e 03d0 88b5 003f 03d0 88b5  ; row 62 | row 63 |
+00000d6a: 0040 03d0 88b5 0041 03d0 88b5 0042 03d0  ; row 64 | row 65 | row 66
+00000d7a: 88b5 0043 03d0 88b5 0044 03d0 88b5 0045  ; row 67 | row 68 | row 69
+00000d8a: 03d0 88b5 0046 03d0 88b5 0047 03d0 88b5  ; row 70 | row 71 |
+00000d9a: 0048 03d0 88b5 0049 03d0 88b5 004a 03d0  ; row 72 | row 73 | row 74
+00000daa: 88b5 004b 03d0 88b5 004c 03d0 88b5 004d  ; row 75 | row 76 | row 77
+00000dba: 03d0 88b5 004e 03d0 88b5 004f 03d0 88b5  ; row 78 | row 79 |
+00000dca: 0050 03d0 88b5 0051 03d0 88b5 0052 03d0  ; row 80 | row 81 | row 82
+00000dda: 88b5 0053 03d0 88b5 0054 03d0 88b5 0055  ; row 83 | row 84 | row 85
+00000dea: 03d0 88b5 0056 03d0 88b5 0057 03d0 88b5  ; row 86 | row 87 |
+00000dfa: 0058 03d0 88b5 0059 03d0 88b5 005a 03d0  ; row 88 | row 89 | row 90
+00000e0a: 88b5 005b 03d0 88b5 005c 03d0 88b5 005d  ; row 91 | row 92 | row 93
+00000e1a: 03d0 88b5 005e 03d0 88b5 005f 03d0 88b5  ; row 94 | row 95 |
+00000e2a: 0060 03d0 88b5 0061 03d0 88b5 0062 03d0  ; row 96 | row 97 | row 98
+00000e3a: 88b5 0063 03d0 88b5 0064 03d0 88b5 0065  ; row 99 | row 100 | row 101
+00000e4a: 03d0 88b5 0066 03d0 88b5 0067 03d0 88b5  ; row 102 | row 103 |
+00000e5a: 0068 03d0 88b5 0069 03d0 88b5 006a 03d0  ; row 104 | row 105 | row 106
+00000e6a: 88b5 006b 03d0 88b5 006c 03d0 88b5 006d  ; row 107 | row 108 | row 109
+00000e7a: 03d0 88b5 006e 03d0 88b5 006f 03d0 88b5  ; row 110 | row 111 |
+00000e8a: 0070 03d0 88b5 0071 03d0 88b5 0072 03d0  ; row 112 | row 113 | row 114
+00000e9a: 88b5 0073 03d0 88b5 0074 03d0 88b5 0075  ; row 115 | row 116 | row 117
+00000eaa: 03d0 88b5 0076 03d0 88b5 0077 03d0 88b5  ; row 118 | row 119 |
+00000eba: 0078 03d0 88b5 0079 03d0 88b5 007a 03d0  ; row 120 | row 121 | row 122
+00000eca: 88b5 007b 03d0 88b5 007c 03d0 88b5 007d  ; row 123 | row 124 | row 125
+00000eda: 03d0 88b5 007e 03d0 88b5 007f 03d0 88b5  ; row 126 | row 127 |
+00000eea: 0080 03d0 88b5 0081 03d0 88b5 0082 03d0  ; row 128 | row 129 | row 130
+00000efa: 88b5 0083 03d0 88b5 0084 03d0 88b5 0085  ; row 131 | row 132 | row 133
+00000f0a: 03d0 88b5 0086 03d0 88b5 0087 03d0 88b5  ; row 134 | row 135 |
+00000f1a: 0088 03d0 88b5 0089 03d0 88b5 008a 03d0  ; row 136 | row 137 | row 138
+00000f2a: 88b5 008b 03d0 88b5 008c 03d0 88b5 008d  ; row 139 | row 140 | row 141
+00000f3a: 03d0 88b5 008e 03d0 88b5 008f 03d0 88b5  ; row 142 | row 143 |
+00000f4a: 0090 03d0 88b5 0091 03d0 88b5 0092 03d0  ; row 144 | row 145 | row 146
+00000f5a: 88b5 0093 03d0 88b5 0094 03d0 88b5 0095  ; row 147 | row 148 | row 149
+00000f6a: 03d0 88b5 0096 03d0 88b5 0097 03d0 88b5  ; row 150 | row 151 |
+00000f7a: 0098 03d0 88b5 0099 03d0 88b5 009a 03d0  ; row 152 | row 153 | row 154
+00000f8a: 88b5 009b 03d0 88b5 009c 03d0 88b5 009d  ; row 155 | row 156 | row 157
+00000f9a: 03d0 88b5 009e 03d0 88b5 009f 03d0 88b5  ; row 158 | row 159 |
+00000faa: 00a0 03d0 88b5 00a1 03d0 88b5 00a2 03d0  ; row 160 | row 161 | row 162
+00000fba: 88b5 00a3 03d0 88b5 00a4 03d0 88b5 00a5  ; row 163 | row 164 | row 165
+00000fca: 03d0 88b5 00a6 03d0 88b5 00a7 03d0 88b5  ; row 166 | row 167 |
+00000fda: 00a8 03d0 88b5 00a9 03d0 88b5 00aa 03d0  ; row 168 | row 169 | row 170
+00000fea: 88b5 00ab 03d0 88b5 00ac 03d0 88b5 00ad  ; row 171 | row 172 | row 173
+00000ffa: 03d0 88b5 00ae 03d0 88b5 00af 03d0 88b5  ; row 174 | row 175 |
+0000100a: 00b0 03d0 88b5 00b1 03d0 88b5 00b2 03d0  ; row 176 | row 177 | row 178
+0000101a: 88b5 00b3 03d0 88b5 00b4 03d0 88b5 00b5  ; row 179 | row 180 | row 181
+0000102a: 03d0 88b5 00b6 03d0 88b5 00b7 03d0 88b5  ; row 182 | row 183 |
+0000103a: 00b8 03d0 88b5 00b9 03d0 88b5 00ba 03d0  ; row 184 | row 185 | row 186
+0000104a: 88b5 00bb 03d0 88b5 00bc 03d0 88b5 00bd  ; row 187 | row 188 | row 189
+0000105a: 03d0 88b5 00be 03d0 88b5 00bf 03d0 88b5  ; row 190 | row 191 |
+0000106a: 00c0 03d0 88b5 00c1 03d0 88b5 00c2 03d0  ; row 192 | row 193 | row 194
+0000107a: 88b5 00c3 03d0 88b5 00c4 03d0 88b5 00c5  ; row 195 | row 196 | row 197
+0000108a: 03d0 88b5 00c6 03d0 88b5 00c7 03d0 88b5  ; row 198 | row 199 (last) |
+0000109a: 00c8 03d0 88b5 00c9 03d0 88b5 00ca 03d0  ; (rows 200+, overflow entries)
+000010aa: 88b5 00cb 03d0 88b5 00cc 03d0 88b5 00cd  ;
+000010ba: 03d0 88b5 00ce 03d0 88b5 00cf 03d0 88b5  ;
+000010ca: 00d0 03d0 88b5 00d1 03d0 88b5 00d2 03d0  ;
+000010da: 88b5 00d3 03d0 88b5 00d4 03d0 88b5 00d5  ;
+000010ea: 03d0 88b5 00d6 03d0 88b5 00d7 03d0 88b5  ;
+000010fa: 00d8 03d0 88b5 00d9 03d0 88b5 00da 03d0  ;
+0000110a: 88b5 00db 03d0 88b5 00dc 03d0 88b5 00dd  ;
+0000111a: 03d0 88b5 00de 03d0 88b5 00df 03d0 88b5  ;
+0000112a: 00e0 03d0 88b5 00e1 03d0 88b5 00e2 03d0  ;
+0000113a: 88b5 00e3 03d0 88b5 00e4 03d0 88b5 00e5  ;
+0000114a: 03d0 88b5 00e6 03d0 88b5 00e7 03d0 88b5  ;
+0000115a: 00e8 03d0 88b5 00e9 03d0 88b5 00ea 03d0  ;
+0000116a: 88b5 00eb 03d0 88b5 00ec 03d0 88b5 00ed  ;
+0000117a: 03d0 88b5 00ee 03d0 88b5 00ef 03d0 88b5  ;
+0000118a: 00f0 03d0 88b5 00f1 03d0 88b5 00f2 03d0  ;
+0000119a: 88b5 00f3 03d0 88b5 00f4 03d0 88b5 00f5  ;
+000011aa: 03d0 88b5 00f6 03d0 88b5 00f7 03d0 88b5  ;
+000011ba: 00f8 03d0 88b5 00f9 03d0 88b5 00fa 03d0  ;
+000011ca: 88b5 00fb 03d0 88b5 00fc 03d0 88b5 00fd  ;
+000011da: 03d0 88b5 00fe 03d0 88b5 00ff 03d0       ; row 255 (last dispatch entry)
 
 ; --- after column draw: update horizon, loop to next distance step ---
 ;   mov [di+xxxx], dh    (final pixel written by dispatch)
@@ -624,16 +624,16 @@
 ;   jnz far_loop          keep going until all distances done
 ;   ret
                                     8835 ff06  ;                                     store | inc [0364]
-000011f0: 6403 83ee 020f 89d9 fa83 2ea0 0302 8b36  ; SI-=2 | jns loop | [03A0]-=2 | SI=[03A0]
-00001200: a003 8bb4 9001 f7c6 0300 7508 c1ee 0283  ; load step_tbl[SI] | align check | >>2
-00001210: fe0f 7700 833e a003 000f 852f fac3        ; clamp | cmp [03A0],0 | jnz loop | ret
+000011ec: 6403 83ee 020f 89d9 fa83 2ea0 0302 8b36  ; SI-=2 | jns loop | [03A0]-=2 | SI=[03A0]
+000011fc: a003 8bb4 9001 f7c6 0300 7508 c1ee 0283  ; load step_tbl[SI] | align check | >>2
+0000120c: fe0f 7700 833e a003 000f 852f fac3        ; clamp | cmp [03A0],0 | jnz loop | ret
 
 ; --- alternate column draw path (for edge cases) ---
                                           65  ;
-00001220: 8a47 0165 2a07 f6ed d1e0 6502 278984 aa05  ; GS: height sample | delta | color lookup
-00001230: ff06 6403 83ee 020f 8997 fa83 2ea0 0302  ; inc [0364] | SI-=2 | jns | [03A0]-=2
-00001240: 8b36 a003 8bb4 9001 f7c6 0300 7508 c1ee  ; reload | align check
-00001250: 0283 fe0f 7700 833e a003 000f 85ed f9c3  ; clamp | cmp [03A0],0 | jnz | ret
+0000121b: 8a47 0165 2a07 f6ed d1e0 6502 278984 aa05  ; GS: height sample | delta | color lookup
+0000122c: ff06 6403 83ee 020f 8997 fa83 2ea0 0302  ; inc [0364] | SI-=2 | jns | [03A0]-=2
+0000123c: 8b36 a003 8bb4 9001 f7c6 0300 7508 c1ee  ; reload | align check
+0000124c: 0283 fe0f 7700 833e a003 000f 85ed f9c3  ; clamp | cmp [03A0],0 | jnz | ret
 
 ; ============================================================================
 ; interpolate — CS:1060 (file 0x1260)

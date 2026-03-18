@@ -64,13 +64,13 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Rendering constants (verified against binary)
 | Constant | Binary value | Source |
 |----------|-------------|--------|
-| Horizon init | 0x7D00 (row 125 × 256) | 0xC32: `66 B8 00 7D 00 7D` (STOSD fills words with 0x7D00) |
+| Horizon init | 0x7D00 (row 125 × 256) | 0xC27: `66 B8 00 7D 00 7D` (STOSD fills words with 0x7D00) |
 | Angle offset | 0x4000 | 0x66D: `05 00 40` (ADD AX, 0x4000) |
 | Angle shift | SHR (unsigned) | 0x66A: `C1 E8 03` |
 | Perspective center | heading/SI + 100 | 0xC60: `33 D2 F7 F6 05 64 00` (XOR DX; DIV SI; ADD AX,100) |
-| Height scale | 0x10000/SI | 0xC90: `F7 F6` (DIV SI) |
-| Map position | posX>>4, posY>>4 | 0xCB2: `C1 E2 04` (SHL DX,4 → DH=high) |
-| Sky fill | 1 row + 40 gradient | 0xBE4: CX=0x40 (64 dwords) |
+| Height scale | 0x10000/SI | 0xC91: `F7 F6` (DIV SI) |
+| Map position | posX>>4, posY>>4 | 0xCB0: `C1 E2 04` (SHL DX,4 → DH=high) |
+| Sky fill | 1 row + 40 gradient | 0xBE3: CX=0x40 (64 dwords) |
 | Sky gradient input | heading>>>1 | 0xBED: `D1 EE` (SHR SI,1) |
 
 ### Binary → web mapping
@@ -82,13 +82,13 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | subdivide | 0x419 | `subdivide(buf, start, size)` |
 | handle_input | 0x608 | mouse/touch/keyboard handlers |
 | render_columns | 0x659 | `render()` — Pass 1 floor plane loop |
-| unrolled column draw | 0x6D9-0xBD7 | floor pixel loop in `render()` (per-col in JS vs unrolled MOVSB) |
-| fill_sky | 0xBDA | sky gradient in `render()` |
+| unrolled column draw | 0x6DA-0xBD4 | floor pixel loop in `render()` (per-col in JS vs unrolled MOVSB) |
+| fill_sky | 0xBDC | sky gradient in `render()` |
 | ray_march | 0xC1F | distance-step loop in `render()` |
-| dispatch table draw | 0xD3E+ | column fill loop with Gouraud shading in `render()` |
-| height interpolation | 0xCDA-0xCF2 | height interp between adjacent samples in `render()` |
-| color interpolation | 0xD1C-0xD3A | slopemap color interp + XCHG step blending in `render()` |
-| bilinear interpolation | 0x125C | (not ported — used in MOVSB pass only) |
+| dispatch table draw | 0xD3A+ | column fill loop with Gouraud shading in `render()` |
+| height interpolation | 0xCD8-0xCEE | height interp between adjacent samples in `render()` |
+| color interpolation | 0xD1C-0xD36 | slopemap color interp + XCHG step blending in `render()` |
+| overlapping instruction | 0x125C | (not ported — handle_input trick) |
 | Jump table | 0x12C0 | (not needed — web uses loop) |
 | Step table | 0x1450 | `stepTable[]` array |
 | Palette data | 0x14CA | `PAL6[]` array |
@@ -107,7 +107,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Key RE techniques used
 - **Overlapping instructions**: Binary has overlapping code at file 0x125C (JNZ opcode doubles as TEST+STC+RET when entered mid-instruction from handle_input's CALL)
 - **Fixed-point arithmetic**: 32-bit fixed-point DDA for ray stepping (ADD BX,AX; ADC SI,BP; CMC pattern)
-- **Unrolled loops**: 200-iteration column draw at 0x6D9-0xBD7 (pattern: A4 03 D8 13 F5 = MOVSB + ADD BX,AX + ADC SI,BP + CMC)
+- **Unrolled loops**: 256-iteration column draw at 0x6DA-0xBD4 (pattern: A4 03 D8 13 F5 = MOVSB + ADD BX,AX + ADC SI,BP + CMC)
 - **Jump table dispatch**: 200-entry table at 0x12C0 for entering unrolled draw at correct scanline
 
 ### Pitfalls discovered
