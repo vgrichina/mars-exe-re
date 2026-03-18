@@ -68,7 +68,6 @@ const colormap = new Uint8Array(65536);   // buffer3: fractal color indices
 // Web separates: viewAngle for rotation (added for interactivity), heading for perspScale.
 let posX = 1000, posY = 1000;
 let heading = 0xFFFF;   // perspScale control: heading/SI + 100. Binary: 0xFFFF when mouse present
-let viewAngle = 0;      // rotation angle (web-only, not in binary)
 let seed = (Date.now() * 7) & 0x7FFF;
 
 // === PRNG: seed = seed * 0xAB + 0x2BCD mod 0xCF85 ===
@@ -227,26 +226,21 @@ function render() {
     //   Per pixel DDA: ADD BX,AX; ADC SI,BP (advances through map)
     //   DEC CL; JNZ → loop rows
     //
-    // Web: use 2D coordinates with cosA/sinA for rotation support.
     // Binary ray_dx = 0x08000000 with heading=0. Per-pixel map advance = step>>16.
     // For ECX=n: map advance per pixel ≈ 0x08000000 / n / 65536 = 2048/n
-    const fwdAngle = viewAngle * (2 * Math.PI / 65536);
-    const cosA = Math.cos(fwdAngle);
-    const sinA = Math.sin(fwdAngle);
-    const floorCamX = (posX | 0) / 128;  // Binary: prev_x << 9 >> 16 = prev_x / 128
-    const floorCamY = (posY | 0) / 128;
+    // Binary has no rotation — camera always faces +Y direction
+    // Binary uses integer positions; ensure no float contamination
+    const iPosX = posX | 0, iPosY = posY | 0;
+    const floorCamX = iPosX / 128;  // Binary: prev_x << 9 >> 16 = prev_x / 128
+    const floorCamY = iPosY / 128;
 
     for (let ecx = 99; ecx >= 1; ecx--) {
         const row = 99 - ecx;  // Row 0 = farthest (ECX=99), Row 98 = nearest (ECX=1)
         const mapStep = 2048 / ecx;  // map positions per pixel
-        // Binary: ray_x -= step (center sweep), ray_y += step (forward depth)
-        // Forward offset provides perspective depth: Y varies per row
-        const fwdX = -sinA * mapStep;
-        const fwdY = cosA * mapStep;
+        // Binary: ray_x -= step (center sweep in X), ray_y += step (forward depth in Y)
         for (let col = 0; col < W; col++) {
-            const d = (col - 128) * mapStep;  // center sweep at col 128 (binary: ray_x -= step)
-            const sx = floorCamX + cosA * d + fwdX;
-            const sy = floorCamY + sinA * d + fwdY;
+            const sx = floorCamX + (col - 128) * mapStep;
+            const sy = floorCamY + mapStep;
             const idx = ((((sy | 0) & 0xFF) << 8) | ((sx | 0) & 0xFF)) & 0xFFFF;
             renderBuf[row * W + col] = colormap[idx];
         }
@@ -277,8 +271,8 @@ function render() {
     //   ECX = prev_x << 12; ECX -= step_size << 7 (center sweep)
     //   BH = prev_y >> 4 (map Y); BL = from ECX (map X)
     // Web: use cosA/sinA for rotation with perpOffset = (col-128)*dist/64
-    const voxCamX = ((((posX | 0) / 16) % 256) + 256) % 256;
-    const voxCamY = ((((posY | 0) / 16) % 256) + 256) % 256;
+    const voxCamX = (((iPosX >> 4) % 256) + 256) % 256;  // Binary: prev_x >> 4
+    const voxCamY = (((iPosY >> 4) % 256) + 256) % 256;  // Binary: prev_y >> 4
 
     const horizon = new Int32Array(W);
     horizon.fill(0x7D00);  // (0xC27): EAX=7D007D00, REP STOSD
@@ -289,7 +283,7 @@ function render() {
         const dist = stepTable[si];
 
         // (0xC50): SI = stepTable[counter] << 4 | (0xF ^ (prev_y & 0xF))
-        const SI = (dist << 4) | (15 - (posY & 0xF));
+        const SI = (dist << 4) | (15 - (iPosY & 0xF));
 
         // (0xC5D): perspScale [03A2] = [0359] / SI + 100
         // (0xC77): special case SI<=2: perspScale=0x7D00, heightScale=0
@@ -300,13 +294,14 @@ function render() {
 
         for (let col = 0; col < W; col++) {
             // (0xC9D-0xCD8): ray position. Binary sweeps +X from prev_x.
-            // step_size [03A6] = SI << 6. Per column: step_size/65536 map units.
-            // Web: perpOffset = (col-128) * dist / 64
-            const perpOffset = (col - 128) * dist / 64;
-            const sampleXf = voxCamX + cosA * perpOffset - sinA * dist;
-            const sampleYf = voxCamY + sinA * perpOffset + cosA * dist;
-            const wrappedX = sampleXf - Math.floor(sampleXf / 256) * 256;
-            const wrappedY = sampleYf - Math.floor(sampleYf / 256) * 256;
+            // step_size [03A6] = SI << 6. Per column: step_size/65536 = SI/1024 map units.
+            // Binary SI includes Y fractional: (dist<<4)|frac, so SI/1024 != dist/64
+            const perpOffset = (col - 128) * SI / 1024;
+            const sampleXf = voxCamX + perpOffset;
+            const sampleYf = voxCamY + dist;
+            // Wrap to 256×256 map and extract integer + fractional parts
+            const wrappedX = ((sampleXf % 256) + 256) % 256;
+            const wrappedY = ((sampleYf % 256) + 256) % 256;
             const sampleXi = wrappedX | 0;
             const sampleYi = wrappedY | 0;
             const fracX16 = ((wrappedX - sampleXi) * 65536) | 0;
@@ -408,8 +403,8 @@ window.addEventListener('mousemove', e => {
     if (!mouseDown) return;
     const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
     lastMX = e.clientX; lastMY = e.clientY;
-    posX += dx;
-    posY -= dy;
+    posX = (posX + dx) | 0;
+    posY = (posY - dy) | 0;
 });
 canvas.addEventListener('touchstart', e => {
     const t = e.touches[0]; lastMX = t.clientX; lastMY = t.clientY; e.preventDefault();
@@ -418,23 +413,16 @@ canvas.addEventListener('touchmove', e => {
     const t = e.touches[0];
     const dx = t.clientX - lastMX, dy = t.clientY - lastMY;
     lastMX = t.clientX; lastMY = t.clientY;
-    posX += dx; posY -= dy;
+    posX = (posX + dx) | 0; posY = (posY - dy) | 0;
     e.preventDefault();
 }, {passive:false});
 
-// Keyboard — viewAngle rotates view, WASD moves in facing direction
-// Render forward direction = (-sinA, cosA), so movement matches
+// Keyboard — binary only has mouse input; arrows/WASD move camera in fixed directions
 window.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft' || e.key === 'a') viewAngle -= 4000;
-    if (e.key === 'ArrowRight' || e.key === 'd') viewAngle += 4000;
-    if (e.key === 'ArrowUp' || e.key === 'w') {
-        const a = (((-viewAngle) >>> 3) & 0xFFFF) * 2 * Math.PI / 0x10000;
-        posX -= Math.sin(a) * 80; posY += Math.cos(a) * 80;
-    }
-    if (e.key === 'ArrowDown' || e.key === 's') {
-        const a = (((-viewAngle) >>> 3) & 0xFFFF) * 2 * Math.PI / 0x10000;
-        posX += Math.sin(a) * 80; posY -= Math.cos(a) * 80;
-    }
+    if (e.key === 'ArrowLeft' || e.key === 'a') posX = (posX - 80) | 0;
+    if (e.key === 'ArrowRight' || e.key === 'd') posX = (posX + 80) | 0;
+    if (e.key === 'ArrowUp' || e.key === 'w') posY = (posY + 80) | 0;
+    if (e.key === 'ArrowDown' || e.key === 's') posY = (posY - 80) | 0;
 });
 
 // === Init & Loop ===

@@ -119,7 +119,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Known differences from binary
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA
 - Binary has two rendering passes: Pass 1 (floor plane via MOVSB from colormap, per-pixel ray advance) + Pass 2 (voxel heights via dispatch table with slopemap Gouraud). Web implements both passes with float math
-- Keyboard heading control added for interactivity (binary only uses mouse position)
+- Keyboard arrows/WASD move camera in fixed X/Y directions (binary only has mouse input)
 - heading=0xFFFF when mouse present (speed check ADD AH,19h at 0x63E). perspScale varies with distance (65535/SI+100). Without mouse, heading=0 and voxel pass produces no visible terrain (perspScale=100 constant, screenY monotonically decreases far-to-near → horizon check always skips)
 - Both smooth passes now match binary in-place behavior (each output feeds subsequent inputs)
 - Sky gradient now at rows 99-139 matching binary (DI continues from floor pass)
