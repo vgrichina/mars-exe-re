@@ -333,11 +333,14 @@ function render() {
             hDelta = (hDelta << 16) >> 16;  // sign extend
             const hProduct = (hDelta * halfFrac) | 0;
             const hShifted = (hProduct >> 7) | 0;
-            const interpH = (((hShifted >> 8) + h0) & 0xFF);
+            // Binary keeps full 16-bit AX: AH = integer height, AL = fractional residue
+            // MUL word [03A4] multiplies full AX by heightScale, uses DX (high word)
+            const interpAH = (((hShifted >> 8) + h0) & 0xFF);
+            const interpAX = ((interpAH << 8) | (hShifted & 0xFF)) & 0xFFFF;
 
             // (0xCEF): MUL [03A4] → projected height in DX
             // (0xCF3): DI = [03A2] - DX → screenY = perspScale - projected
-            let screenY = (perspScale - ((interpH << 8) * heightScale >>> 16)) | 0;
+            let screenY = (perspScale - (interpAX * heightScale >>> 16)) | 0;
 
             // (0xCF9): clamp: if screenY < 0 → -1 (JNS+3; MOV DI,FFFF)
             // (0xCFE): if screenY >= 200 → 199 (CMP DI,C8; JL+3; MOV DI,C7)
