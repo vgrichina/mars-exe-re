@@ -88,6 +88,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | dispatch table draw | 0xD3A+ | column fill loop with Gouraud shading in `render()` |
 | height interpolation | 0xCD8-0xCEE | height interp between adjacent samples in `render()` |
 | color interpolation | 0xD1C-0xD36 | slopemap color interp + XCHG step blending in `render()` |
+| alternate skip path | 0x121A | color compute + MOV prevColor when columnHeight >= 0 (no draw) |
 | overlapping instruction | 0x125C | (not ported — handle_input trick) |
 | Jump table | 0x12C0 | (not needed — web uses loop) |
 | Step table | 0x1450 | `stepTable[]` array |
@@ -115,6 +116,8 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 - Binary heading is effectively 0 or 0xFFFF (not continuous) — heading rotation is minimal
 - Map coordinates use posX>>4 / posY>>4, not raw position values
 - `05 00 40` = ADD AX, 0x4000 (not +64) — the 0x4000 is a quarter-turn in 16-bit angle space
+- Binary alternate path (0x121A) updates prevColor via MOV even when skipping draw (columnHeight >= 0) — missing this causes wrong Gouraud shading start colors on first visible span per column
+- Binary dispatch table uses 16-bit DI wrap trick: DI=screenY*256+base, dispatch offsets for rows 57-255 wrap around 65536 to land at rows (oldHorizon+1)..screenY — draw range is +1 shifted from naive (oldHorizon)..(screenY-1)
 
 ### Known differences from binary
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA

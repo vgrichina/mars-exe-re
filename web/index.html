@@ -356,15 +356,10 @@ function render() {
             // (0xD11): JNS skip — skip when BP >= 0 (ascending terrain)
             // Only draw when BP < 0 (screenY > oldHorizon = terrain descends)
             const columnHeight = (oldHorizon - screenY) | 0;
-            if (columnHeight >= 0) continue;
-
-            // Drawing: fill from oldHorizon to screenY (the descending gap)
-            const drawStart = oldHorizon < 0 ? 0 : (oldHorizon > H ? H : oldHorizon);
-            const drawEnd = screenY < 0 ? 0 : (screenY > H ? H : screenY);
-            if (drawStart >= drawEnd) continue;
 
             // (0xD1C): Color interpolation from slopemap (GS segment)
             // MOV AL,GS:[BX+1]; SUB AL,GS:[BX]; IMUL CH; SHL AX,1; ADD AH,GS:[BX]
+            // Binary computes color even on skip path (alternate at 0x121A: MOV [SI+05AA],AX)
             const CH = (halfFrac >>> 8) & 0xFF;
             const c0 = slopemap[mapIdx];
             const c1 = slopemap[nextIdx];
@@ -374,9 +369,22 @@ function render() {
             const colorHi = ((cProd >> 8) + c0) & 0xFF;
             const colorAX = ((colorHi << 8) | (cProd & 0xFF)) & 0xFFFF;
 
+            if (columnHeight >= 0) {
+                // Alternate path (0x121A): store color but don't draw (MOV, not XCHG)
+                prevColor[col] = colorAX;
+                continue;
+            }
+
             // (0xD2C): XCHG AX,[SI+05AA] — swap current with prev color
+            // Binary does XCHG unconditionally when columnHeight < 0
             const oldColor = prevColor[col];
             prevColor[col] = colorAX;
+
+            // Drawing: binary dispatch uses 16-bit wrap to draw rows
+            // (oldHorizon+1) through screenY inclusive (NOT oldHorizon..screenY-1)
+            const drawStart = (oldHorizon + 1) < 0 ? 0 : ((oldHorizon + 1) > H ? H : (oldHorizon + 1));
+            const drawEnd = (screenY + 1) < 0 ? 0 : ((screenY + 1) > H ? H : (screenY + 1));
+            if (drawStart >= drawEnd) continue;
 
             // (0xD33): AX = oldColor - newColor; CWD; IDIV BP → color step
             // (0xD36): POP DX (old color = start value)
