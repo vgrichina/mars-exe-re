@@ -244,10 +244,11 @@ function render() {
         const startY = (ebp >>> 16) & 0xFF;
         const startX = (esi >>> 16) & 0xFF;
         let si = (startY << 8) | startX;
-        // DDA params: AX = (step>>7)&0xFFFF, BP = (step>>7)>>16
+        // DDA params: AX = (step>>7)&0xFFFF, BP = ((step>>7)>>16) - 1
+        // Binary DEC BP at 0x6DA compensates for MOVSB's SI auto-increment
         const ddaStep = (step >>> 7) | 0;
         const ddaAX = ddaStep & 0xFFFF;
-        const ddaBP = (ddaStep >>> 16) & 0xFFFF;
+        const ddaBP = (((ddaStep >>> 16) - 1) & 0xFFFF);
         let bx = esi & 0xFFFF;  // fractional X position
         for (let col = 0; col < W; col++) {
             renderBuf[row * W + col] = colormap[si & 0xFFFF];
@@ -301,11 +302,11 @@ function render() {
         const SI = (dist << 4) | (15 - (iPosY & 0xF));
 
         // (0xC5D): perspScale [03A2] = [0359] / SI + 100
-        // (0xC77): special case SI<=2: perspScale=0x7D00, heightScale=0
-        const perspScale = (SI <= 2) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
+        // (0xC77): special case [03A0]==2 (last step, si===1): perspScale=0x7D00, heightScale=0
+        const perspScale = (si === 1) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
 
         // (0xC8C): heightScale [03A4] = 0x10000 / SI
-        const heightScale = (SI <= 2) ? 0 : (0x10000 / SI) | 0;
+        const heightScale = (si === 1) ? 0 : (0x10000 / SI) | 0;
 
         for (let col = 0; col < W; col++) {
             // (0xC9D-0xCD8): ray position. Binary sweeps +X from prev_x.

@@ -345,21 +345,25 @@
 000006a0: 6003 6633 d266 f7f1 6665 8b36 6403 6665  ; load ray params | div | GS: load positions
 000006b0: 8b2e 6803 662b f066 03e8 66c1 e807 8bde  ; compute deltas | shift
 000006c0: 66c1 ee10 81e6 ff00 66c1 ed08 81e5 00ff  ; extract X,Y byte indices from fixed-point
-000006d0: 0bf5 668b e866 c1ed 10                    ; combine | save height
+000006d0: 0bf5 668b e866 c1ed 10                    ; SI=Y|X | EBP=step>>7 | BP=(step>>7)>>16
+;   Then DEC BP (4D at 0x6DA) → BP = (step>>23) - 1; compensates for MOVSB SI++
+;   DDA per pixel: AX = (step>>7) & 0xFFFF, BP = (step>>23) - 1
 
 ; ============================================================================
 ; UNROLLED FLOOR DRAW — CS:04DA (file 0x6DA)
-; 256 iterations: MOVSB + ADD BX,AX + ADC SI,BP + CMC
-; Pattern: A4 03 D8 13 F5 repeating
-;   A4 = MOVSB: copy DS:[SI] (colormap) → ES:[DI] (render buf), inc SI, inc DI
-;   03 D8 = ADD BX, AX (advance fractional ray position)
-;   13 F5 = ADC SI, BP (advance integer ray position = colormap index via carry)
-;   F5 = CMC (complement carry for next iteration)
+; DEC BP at 0x6DA compensates for MOVSB's SI auto-increment:
+;   net per-pixel SI advance = 1 (MOVSB) + (BP-1) + carry = BP + carry
+; 256 iterations: MOVSB + ADD BX,AX + ADC SI,BP
+; Pattern: A4 03 D8 13 F5 repeating (5 bytes, 3 instructions)
+;   A4    = MOVSB: copy DS:[SI] (colormap) → ES:[DI] (render buf), inc SI, inc DI
+;   03 D8 = ADD BX, AX (advance fractional ray position, sets carry)
+;   13 F5 = ADC SI, BP (advance integer ray position via carry; F5 is ModRM for SI,BP)
+; Note: F5 is the ModRM byte of ADC SI,BP — NOT a standalone CMC instruction.
 ; Each pixel samples a different colormap position along the ray.
 ; DI starts at 07AA (render buffer), increments by 1 per pixel.
-; 256 × 5 = 1280 bytes (0x6DA to 0xBD9)
+; 1 + 256 × 5 = 1281 bytes (0x6DA to 0xBD9)
 ; ============================================================================
-                              4da4 03d8 13f5 a4  ;                             start unrolled draw
+                              4da4 03d8 13f5 a4  ;                             DEC BP | then 256× MOVSB+ADD+ADC
 000006e0: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ; scanline draw × 3
 000006f0: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ;
 00000700: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ;
@@ -368,8 +372,8 @@
 00000730: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ; ... (repeating pattern: A4 03 D8 13 F5)
 00000740: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ; A4 = MOVSB (copy byte DS:SI→ES:DI, inc SI,DI)
 00000750: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ; 03 D8 = ADD BX, AX
-00000760: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ; 13 F5 = ADC SI, BP
-00000770: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ; F5 = CMC (complement carry)
+00000760: f5a4 03d8 13f5 a403 d813 f5a4 03d8 13f5  ; 13 F5 = ADC SI, BP (F5 = ModRM byte, not CMC)
+00000770: a403 d813 f5a4 03d8 13f5 a403 d813 f5a4  ;
 00000780: 03d8 13f5 a403 d813 f5a4 03d8 13f5 a403  ;
 00000790: d813 f5a4 03d8 13f5 a403 d813 f5a4 03d8  ; Together: copy pixel + advance through heightmap
 000007e6: 13f5 a403 d813 f5a4 03d8 13f5 a403 d813  ; with fixed-point stepping (carry propagation)

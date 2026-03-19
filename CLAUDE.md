@@ -56,7 +56,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 3. **Heightmap post-processing**: First smooth uses table-driven asymmetric kernel with offsets {0, +4, +514, -257} loaded from DS:032F-0335 via `[034F]<<4` index → slope calc from buffer1 to buffer2/slopemap (`h[i]-h[i+3]+32`, clamp 0..63) → second smooth uses standard 2×2 box {0, +1, +256, +257}. Heightmap retains fractal heights (0-255 range), slopemap has slope/shading values (0-63)
 4. **Colormap**: same fractal, transformed to palette indices 64-95 (`byte>>3 + 0x40`)
 5. **Renderer**: Two-pass architecture:
-   - **Pass 1 (floor plane)**: render_columns (0x659). Draws flat ground texture from colormap using 1/y perspective scaling (DIV ECX). Per row: ray_x/ray_y reloaded from [0364]/[0368], offset by ±step (ray_x -= step centers X sweep, ray_y += step provides forward depth). 256 MOVSB per row with DDA (ADD BX,AX; ADC SI,BP; CMC). 99 rows (ECX=99→1).
+   - **Pass 1 (floor plane)**: render_columns (0x659). Draws flat ground texture from colormap using 1/y perspective scaling (DIV ECX). Per row: ray_x/ray_y reloaded from [0364]/[0368], offset by ±step (ray_x -= step centers X sweep, ray_y += step provides forward depth). DEC BP before unrolled loop compensates for MOVSB SI++. 256 MOVSB per row with DDA (ADD BX,AX; ADC SI,BP). Note: F5 in pattern A4 03 D8 13 F5 is the ModRM byte of ADC SI,BP, NOT a CMC instruction. 99 rows (ECX=99→1).
    - **Pass 2 (voxel heights)**: ray_march (0xC1F). Far-to-near with horizon buffer, draws 3D terrain columns over floor. Height interpolation between adjacent heightmap samples. Slopemap Gouraud shading via dispatch table (MOV [DI+off],DH; ADD DX,AX).
 6. **Palette**: 97 entries (indices 0-96) extracted from binary at file offset 0x14CA (6-bit VGA DAC values). Entry 96 = white (compass indicator)
 7. **Sky gradient**: `val = clamp((heading>>>1 + 10) / row) >>> 7, 63)` for 40 rows
@@ -107,7 +107,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 ### Key RE techniques used
 - **Overlapping instructions**: Binary has overlapping code at file 0x125C (JNZ opcode doubles as TEST+STC+RET when entered mid-instruction from handle_input's CALL)
 - **Fixed-point arithmetic**: 32-bit fixed-point DDA for ray stepping (ADD BX,AX; ADC SI,BP; CMC pattern)
-- **Unrolled loops**: 256-iteration column draw at 0x6DA-0xBD4 (pattern: A4 03 D8 13 F5 = MOVSB + ADD BX,AX + ADC SI,BP + CMC)
+- **Unrolled loops**: 256-iteration column draw at 0x6DA-0xBD4 (DEC BP at 0x6DA, then pattern: A4 03 D8 13 F5 = MOVSB + ADD BX,AX + ADC SI,BP; F5 is ModRM not CMC)
 - **Jump table dispatch**: 200-entry table at 0x12C0 for entering unrolled draw at correct scanline
 
 ### Pitfalls discovered
