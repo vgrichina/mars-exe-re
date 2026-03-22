@@ -328,7 +328,7 @@ function render() {
             const binCol = 255 - renderCol;
             const halfFrac = cx & 0x7FFF;
             const mapIdx = ((bx >> 8) & 0xFF) << 8 | (bx & 0xFF);
-            const nextIdx = ((bx >> 8) & 0xFF) << 8 | ((bx + 1) & 0xFF);
+            const nextIdx = (bx + 1) & 0xFFFF;
 
             const h0 = heightmap[mapIdx], h1 = heightmap[nextIdx];
             let hDelta = (h1 - h0) | 0;

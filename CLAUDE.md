@@ -118,6 +118,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 - `05 00 40` = ADD AX, 0x4000 (not +64) — the 0x4000 is a quarter-turn in 16-bit angle space
 - Binary alternate path (0x121A) updates prevColor via MOV even when skipping draw (columnHeight >= 0) — missing this causes wrong Gouraud shading start colors on first visible span per column
 - Binary dispatch table uses 16-bit DI wrap trick: DI=screenY*256+base, dispatch offsets for rows 57-255 wrap around 65536 to land at rows (oldHorizon+1)..screenY — draw range is +1 shifted from naive (oldHorizon)..(screenY-1)
+- `FS:[BX+1]` in height/slope interpolation is a 16-bit address increment: when BL=0xFF, BX+1=BX+1 carries into BH (next map row). The "next sample" is NOT `(BH<<8)|((BL+1)&0xFF)` — it's `(BX+1)&0xFFFF`. This matters at x=255 column boundaries.
 
 ### Known differences from binary
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA
@@ -130,3 +131,4 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 - Floor pass now includes forward depth offset: per-row Y = camY + 2048/ECX (binary: ray_y += step per row)
 - Segment assignments in MOVSB pass: DS=colormap [034B], GS=DS segment [0345], ES=DS segment (render buffer destination). Annotation previously had DS/ES swapped.
 - Binary's handle_input CALL 0x125C is overlapping instruction trick (TEST BP,BP; STC; RET) — no-op that preserves AH from INT 33h. Speed check (ADD AH,19h; JNC) sets heading=0xFFFF when mouse present. Web sets heading=0xFFFF to match (required for voxel pass visibility).
+- Web port is now pixel-perfect against binary (verified across 50+ seeds via tools/compare.js)
