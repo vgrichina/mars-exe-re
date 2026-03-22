@@ -1481,6 +1481,11 @@ class CPU {
         this.watchpoints.set(linearAddr & 0xFFFFF, callback);
     }
 
+    // Convenience: watch a seg:off address
+    watchMemory(seg, off, callback) {
+        this.addWatchpoint(this.linear(seg, off), callback);
+    }
+
     removeWatchpoint(linearAddr) {
         this.watchpoints.delete(linearAddr & 0xFFFFF);
     }
@@ -1665,6 +1670,16 @@ function main() {
                 });
                 break;
             }
+            case "--watch-seg": case "--watch-break-seg": {
+                const brk = args[i] === "--watch-break-seg";
+                const parts = args[++i].toUpperCase().split(":");
+                const segName = parts[0];
+                const off = parseInt("0x" + parts[1]);
+                // Defer resolution until after snapshot/exe loaded
+                cpu._deferredWatches = cpu._deferredWatches || [];
+                cpu._deferredWatches.push({ segName, off, brk });
+                break;
+            }
             case "--help":
                 console.log(`emu86.js — mars.exe emulator
 Usage:
@@ -1680,8 +1695,10 @@ Usage:
   --mouse-dy <N>     Set mouse delta Y
   --no-mouse         Disable mouse
   --break <IP>       Break at code offset (hex: 0x0A1F)
-  --watch <addr>     Log writes to linear address (hex)
+  --watch <addr>     Log writes to linear address (hex, e.g. 0x27AA)
   --watch-break <a>  Break on write to linear address (hex)
+  --watch-seg <s:o>  Log writes to seg:off address (hex, e.g. DS:07AA)
+  --watch-break-seg <s:o>  Break on write to seg:off address
 
 Trace format:
   SSSS:OOOO  HEXBYTES             ; register/memory effects`);
@@ -1702,8 +1719,28 @@ Trace format:
         process.exit(1);
     }
 
+    // Resolve deferred seg:off watchpoints now that segments are known
+    if (cpu._deferredWatches) {
+        const segMap = { CS: cpu.cs, DS: cpu.ds, ES: cpu.es, SS: cpu.ss, FS: cpu.fs, GS: cpu.gs };
+        for (const w of cpu._deferredWatches) {
+            const seg = segMap[w.segName];
+            if (seg === undefined) { console.error(`Unknown segment: ${w.segName}`); process.exit(1); }
+            const linear = cpu.linear(seg, w.off);
+            cpu.addWatchpoint(linear, (c, addr, val, size) => {
+                const vStr = size === 1 ? hex(val,2) : (size === 2 ? hex(val,4) : hex(val,8));
+                console.error(`WATCH${w.brk ? '-BREAK' : ''} ${w.segName}:${hex(w.off,4)} [${hex(addr,5)}]: ${vStr} @ ${hex(c.cs,4)}:${hex(c.ip,4)}`);
+                return w.brk;
+            });
+        }
+    }
+
     const n = cpu.run(steps);
     console.error(`Executed ${n} instructions, halted=${cpu.halted}`);
+    if (cpu.halted) {
+        console.error(`Regs: AX=${hex(cpu.ax,4)} BX=${hex(cpu.bx,4)} CX=${hex(cpu.cx,4)} DX=${hex(cpu.dx,4)} SI=${hex(cpu.si,4)} DI=${hex(cpu.di,4)} BP=${hex(cpu.bp,4)} SP=${hex(cpu.sp,4)}`);
+        console.error(`      EAX=${hex(cpu.eax,8)} EBX=${hex(cpu.ebx,8)} ECX=${hex(cpu.ecx,8)} EDX=${hex(cpu.edx,8)}`);
+        console.error(`      CS=${hex(cpu.cs,4)} DS=${hex(cpu.ds,4)} ES=${hex(cpu.es,4)} FS=${hex(cpu.fs,4)} GS=${hex(cpu.gs,4)} IP=${hex(cpu.ip,4)} CF=${cpu.cf} ZF=${cpu.zf} SF=${cpu.sf}`);
+    }
 
     if (cpu.traceEnabled) {
         const traceText = cpu.trace.join("\n") + "\n";
