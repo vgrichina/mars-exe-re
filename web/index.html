@@ -235,17 +235,17 @@ function render() {
     //   Per pixel DDA: ADD BX,AX; ADC SI,BP (advances through map)
     //   DEC CL; JNZ → loop rows
     //
-    // Binary DDA: ray_dx = 0x08000000; step = ray_dx / ECX
-    // MOVSB advances SI by 1, then DDA adds (step >> 7) as 16.16 fixed-point
-    // Per-pixel combined map index advance = 1 + (step>>7)/65536 = 1 + 16/ECX
-    // NOT 2048/ECX — that was the 32-bit step >> 16, not the DDA rate
+    // Binary: ray_dx = (((-heading) >>> 3) + 0x4000) << 13; step = ray_dx / ECX
+    // For heading=0xFFFF: ray_dx = 0x08000000
     const iPosX = posX | 0, iPosY = posY | 0;
+    const negH = ((-heading) & 0xFFFF) >>> 0;
+    const ray_dx = (((negH >>> 3) + 0x4000) & 0xFFFF) << 13;
     const ray_x = (iPosX << 9) | 0;   // 32-bit fixed-point X
     const ray_y = (iPosY << 9) | 0;   // 32-bit fixed-point Y
 
     for (let ecx = 99; ecx >= 1; ecx--) {
         const row = 99 - ecx;
-        const step = (0x08000000 / ecx) | 0;  // integer division like binary DIV ECX
+        const step = (ray_dx / ecx) | 0;  // integer division like binary DIV ECX
         // ESI = ray_x - step (center), EBP = ray_y + step (forward depth)
         const esi = (ray_x - step) | 0;
         const ebp = (ray_y + step) | 0;
@@ -287,88 +287,88 @@ function render() {
     }
 
     // === Pass 2: Voxel heightmap (ray_march, 0xC1F) ===
-    // (0xC1F): FS=[0347](heightmap); GS=[0349](slopemap)
-    // (0xC27): fill horizon buf DS:03AA with 0x7D00 (256 words)
-    // (0xC37): fill prevColor buf DS:05AA with 0 (256 words)
-    // (0xC42): [03A0] = 0x78 (120 = word offset, step table indices 60→1)
-    //
-    // Voxel pass sweeps +X from camera. Binary (0xC9D):
-    //   ECX = prev_x << 12; ECX -= step_size << 7 (center sweep)
-    //   BH = prev_y >> 4 (map Y); BL = from ECX (map X)
-    // Web: use cosA/sinA for rotation with perpOffset = (col-128)*dist/64
-    const voxCamX = (((iPosX >> 4) % 256) + 256) % 256;  // Binary: prev_x >> 4
-    const voxCamY = (((iPosY >> 4) % 256) + 256) % 256;  // Binary: prev_y >> 4
-
+    // Binary uses integer DDA to sweep columns +X from camera.
+    // ECX = prev_x << 12; ECX -= step_size << 7 (center sweep left edge)
+    // BH = (prev_y << 4) combined with step offset for map Y
+    // Per-column: SHL CX,1; ADD CX,[step_lo]; ADC BL,[step_hi]; SHR CX,1
     const horizon = new Int32Array(W);
-    horizon.fill(0x7D00);  // (0xC27): EAX=7D007D00, REP STOSD
-    const prevColor = new Int16Array(W);  // (0xC37): zeroed
+    horizon.fill(0x7D00);
+    const prevColor = new Int16Array(W);
 
-    // (0xC42): distance counter [03A0]=120, decrements by 2 → step indices 60..1
-    for (let si = stepTable.length - 1; si >= 1; si--) {
-        const dist = stepTable[si];
+    for (let stIdx = stepTable.length - 1; stIdx >= 1; stIdx--) {
+        const dist = stepTable[stIdx];
 
-        // (0xC50): SI = stepTable[counter] << 4 | (0xF ^ (prev_y & 0xF))
+        // SI = stepTable[counter] << 4 | (0xF ^ (prev_y & 0xF))
         const SI = (dist << 4) | (15 - (iPosY & 0xF));
 
-        // (0xC5D): perspScale [03A2] = [0359] / SI + 100
-        // (0xC77): special case [03A0]==2 (last step, si===1): perspScale=0x7D00, heightScale=0
-        const perspScale = (si === 1) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
+        const perspScale = (stIdx === 1) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
+        const heightScale = (stIdx === 1) ? 0 : (0x10000 / SI) | 0;
 
-        // (0xC8C): heightScale [03A4] = 0x10000 / SI
-        const heightScale = (si === 1) ? 0 : (0x10000 / SI) | 0;
+        // step_size = SI << 6 (stored as dword at [03A6])
+        const stepSize = (SI << 6) >>> 0;
+        const stepLo = stepSize & 0xFFFF;       // [03A6] low word
+        const stepHi = (stepSize >>> 16) & 0xFF; // [03A8] byte
 
-        for (let col = 0; col < W; col++) {
-            // (0xC9D-0xCD8): ray position. Binary sweeps +X from prev_x.
-            // step_size [03A6] = SI << 6. Per column: step_size/65536 = SI/1024 map units.
-            // Binary SI includes Y fractional: (dist<<4)|frac, so SI/1024 != dist/64
-            const perpOffset = (col - 128) * SI / 1024;
-            const sampleXf = voxCamX + perpOffset;
-            const sampleYf = voxCamY + dist;
-            // Wrap to 256×256 map and extract integer + fractional parts
-            const wrappedX = ((sampleXf % 256) + 256) % 256;
-            const wrappedY = ((sampleYf % 256) + 256) % 256;
-            const sampleXi = wrappedX | 0;
-            const sampleYi = wrappedY | 0;
-            const fracX16 = ((wrappedX - sampleXi) * 65536) | 0;
-            const halfFrac = (fracX16 >>> 1) & 0x7FFF;
-            const mapIdx = ((sampleYi & 0xFF) << 8) | (sampleXi & 0xFF);
-            const nextIdx = ((sampleYi & 0xFF) << 8) | ((sampleXi + 1) & 0xFF);
+        // Ray position setup (0xC96-0xCCA):
+        // ECX = prev_x << 12
+        // EAX = step_size << 7
+        // ECX -= EAX (center the sweep)
+        // DX = prev_y << 4
+        // EBX = ECX (copy 32-bit)
+        // EBX >>= 16 (extract high word for map X position)
+        // BH = DH (map Y from prev_y)
+        // AX = SI >> 4 (= dist)
+        // BH += AL (add distance to map Y)
+        let ecxRay = ((iPosX << 12) - ((stepSize << 7) >>> 0)) | 0;
+        const dxShifted = (iPosY << 4) & 0xFFFF;
+        let bx = (ecxRay >>> 16) & 0xFFFF;  // BL = map X, BH from ECX high
+        bx = (bx & 0x00FF) | ((dxShifted >> 8) << 8);  // BH = DH = (prev_y<<4)>>8
+        bx = (bx & 0x00FF) | ((((bx >> 8) + ((SI >> 4) & 0xFF)) & 0xFF) << 8); // BH += dist
 
-            // (0xCD8): Height interpolation
-            // SHR CX,1; MOV AL,FS:[BX+1]; XOR AH,AH; SUB AL,FS:[BX]; SBB AH,0
-            // IMUL CX; SHRD AX,DX,7; ADD AH,FS:[BX]
+        // CX = fractional part for DDA (from ECX low word, then SHR CX,1 initially)
+        // Binary: SI=01FE (column counter), starts at rightmost and counts down
+        // But columns map to render buffer left-to-right via [0364] pointer
+        // Initial: SHL CX,1; ADD CX,[03A6]; ADC BL,[03A8]; SHR CX,1
+        // This advances BX by one column BEFORE the first sample
+        let cx = ecxRay & 0xFFFF;
+        cx = (cx >>> 1) & 0xFFFF;  // binary SHR CX,1 at 0xAC3 before DDA loop
+        cx = (cx << 1) & 0xFFFF;
+        let addResult = cx + stepLo;
+        let carry = addResult > 0xFFFF ? 1 : 0;
+        cx = addResult & 0xFFFF;
+        bx = (((bx & 0xFF) + stepHi + carry) & 0xFF) | (bx & 0xFF00);
+        cx = (cx >>> 1) & 0xFFFF;
+
+        // Binary iterates SI=0x01FE..0x0000 (columns 255..0) but renders
+        // left-to-right via [0364] pointer. So binary col 255 = render pixel 0.
+        // We iterate renderCol 0..255, mapping to binary column (255-renderCol).
+        // The DDA advances BX from col 255 toward col 0.
+        // Horizon/prevColor are indexed by binary column (SI/2), which equals
+        // (255-renderCol). But since the binary uses SI as index into horizon[],
+        // and SI counts down, horizon[255] = first rendered column.
+        for (let renderCol = 0; renderCol < W; renderCol++) {
+            const binCol = 255 - renderCol; // binary SI/2
+            const halfFrac = cx & 0x7FFF;
+            const mapIdx = ((bx >> 8) & 0xFF) << 8 | (bx & 0xFF);
+            const nextIdx = ((bx >> 8) & 0xFF) << 8 | ((bx + 1) & 0xFF);
+
             const h0 = heightmap[mapIdx];
             const h1 = heightmap[nextIdx];
             let hDelta = (h1 - h0) | 0;
-            hDelta = (hDelta << 16) >> 16;  // sign extend
+            hDelta = (hDelta << 16) >> 16;
             const hProduct = (hDelta * halfFrac) | 0;
             const hShifted = (hProduct >> 7) | 0;
-            // Binary keeps full 16-bit AX: AH = integer height, AL = fractional residue
-            // MUL word [03A4] multiplies full AX by heightScale, uses DX (high word)
             const interpAH = (((hShifted >> 8) + h0) & 0xFF);
             const interpAX = ((interpAH << 8) | (hShifted & 0xFF)) & 0xFFFF;
 
-            // (0xCEF): MUL [03A4] → projected height in DX
-            // (0xCF3): DI = [03A2] - DX → screenY = perspScale - projected
             let screenY = (perspScale - (interpAX * heightScale >>> 16)) | 0;
-
-            // (0xCF9): clamp: if screenY < 0 → -1 (JNS+3; MOV DI,FFFF)
-            // (0xCFE): if screenY >= 200 → 199 (CMP DI,C8; JL+3; MOV DI,C7)
             if (screenY < 0) screenY = -1;
             if (screenY >= H) screenY = H - 1;
 
-            // (0xD07): BP = [SI+03AA]; [SI+03AA] = DI
-            const oldHorizon = horizon[col];
-            horizon[col] = screenY;
-
-            // (0xD0F): BP -= DI (column height = oldHorizon - screenY)
-            // (0xD11): JNS skip — skip when BP >= 0 (ascending terrain)
-            // Only draw when BP < 0 (screenY > oldHorizon = terrain descends)
+            const oldHorizon = horizon[binCol];
+            horizon[binCol] = screenY;
             const columnHeight = (oldHorizon - screenY) | 0;
 
-            // (0xD1C): Color interpolation from slopemap (GS segment)
-            // MOV AL,GS:[BX+1]; SUB AL,GS:[BX]; IMUL CH; SHL AX,1; ADD AH,GS:[BX]
-            // Binary computes color even on skip path (alternate at 0x121A: MOV [SI+05AA],AX)
             const CH = (halfFrac >>> 8) & 0xFF;
             const c0 = slopemap[mapIdx];
             const c1 = slopemap[nextIdx];
@@ -379,36 +379,32 @@ function render() {
             const colorAX = ((colorHi << 8) | (cProd & 0xFF)) & 0xFFFF;
 
             if (columnHeight >= 0) {
-                // Alternate path (0x121A): store color but don't draw (MOV, not XCHG)
-                prevColor[col] = colorAX;
-                continue;
+                prevColor[binCol] = colorAX;
+            } else {
+                const oldColor = prevColor[binCol];
+                prevColor[binCol] = colorAX;
+
+                const drawStart = (oldHorizon + 1) < 0 ? 0 : ((oldHorizon + 1) > H ? H : (oldHorizon + 1));
+                const drawEnd = (screenY + 1) < 0 ? 0 : ((screenY + 1) > H ? H : (screenY + 1));
+                if (drawStart < drawEnd) {
+                    const negHeight = -columnHeight;
+                    const colorDiff = (oldColor - colorAX) | 0;
+                    const colorStep = (negHeight > 0) ? ((-colorDiff / negHeight) | 0) : 0;
+                    let drawColor = oldColor;
+                    for (let y = drawStart; y < drawEnd; y++) {
+                        renderBuf[y * W + renderCol] = (drawColor >> 8) & 0xFF;
+                        drawColor = (drawColor + colorStep) | 0;
+                    }
+                }
             }
 
-            // (0xD2C): XCHG AX,[SI+05AA] — swap current with prev color
-            // Binary does XCHG unconditionally when columnHeight < 0
-            const oldColor = prevColor[col];
-            prevColor[col] = colorAX;
-
-            // Drawing: binary dispatch uses 16-bit wrap to draw rows
-            // (oldHorizon+1) through screenY inclusive (NOT oldHorizon..screenY-1)
-            const drawStart = (oldHorizon + 1) < 0 ? 0 : ((oldHorizon + 1) > H ? H : (oldHorizon + 1));
-            const drawEnd = (screenY + 1) < 0 ? 0 : ((screenY + 1) > H ? H : (screenY + 1));
-            if (drawStart >= drawEnd) continue;
-
-            // (0xD33): AX = oldColor - newColor; CWD; IDIV BP → color step
-            // (0xD36): POP DX (old color = start value)
-            // Binary IDIV BP where BP is negative (oldHorizon-screenY < 0),
-            // so colorStep = (prev-curr)/negative = -(prev-curr)/|height|
-            const negHeight = -columnHeight;  // positive count of pixels
-            const colorDiff = (oldColor - colorAX) | 0;
-            const colorStep = (negHeight > 0) ? ((-colorDiff / negHeight) | 0) : 0;
-            let drawColor = oldColor;
-
-            // (0xD3A+): Dispatch table draw: MOV [DI+offset],DH; ADD DX,AX
-            for (let y = drawStart; y < drawEnd; y++) {
-                renderBuf[y * W + col] = (drawColor >> 8) & 0xFF;
-                drawColor = (drawColor + colorStep) | 0;
-            }
+            // Per-column DDA advance
+            cx = (cx << 1) & 0xFFFF;
+            addResult = cx + stepLo;
+            carry = addResult > 0xFFFF ? 1 : 0;
+            cx = addResult & 0xFFFF;
+            bx = (((bx & 0xFF) + stepHi + carry) & 0xFF) | (bx & 0xFF00);
+            cx = (cx >>> 1) & 0xFFFF;
         }
     }
 

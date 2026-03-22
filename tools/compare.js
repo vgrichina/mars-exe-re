@@ -257,15 +257,18 @@ compareBuffers("Slopemap", slopemap, binarySlopemap, 65536);
 
 // === Run web renderer ===
 const renderBuf = new Uint8Array(W * H);
-const heading = 0xFFFF;
+const heading = cpu.readWord(cpu.ds, 0x0359);
 
 function render() {
     const iPosX = 1000, iPosY = 1000;
     const ray_x = (iPosX << 9) | 0, ray_y = (iPosY << 9) | 0;
 
+    // ray_dx = (((-heading) & 0xFFFF) >>> 3) + 0x4000) << 13
+    const negH = ((-heading) & 0xFFFF) >>> 0;
+    const ray_dx = (((negH >>> 3) + 0x4000) & 0xFFFF) << 13;
     for (let ecx = 99; ecx >= 1; ecx--) {
         const row = 99 - ecx;
-        const step = (0x08000000 / ecx) | 0;
+        const step = (ray_dx / ecx) | 0;
         const esi = (ray_x - step) | 0, ebp = (ray_y + step) | 0;
         let si = (((ebp >>> 16) & 0xFF) << 8) | ((esi >>> 16) & 0xFF);
         const ddaStep = (step >>> 7) | 0;
@@ -293,29 +296,39 @@ function render() {
     }
 
     const iPosX2 = 1000, iPosY2 = 1000;
-    const voxCamX = (((iPosX2 >> 4) % 256) + 256) % 256;
-    const voxCamY = (((iPosY2 >> 4) % 256) + 256) % 256;
     const horizon = new Int32Array(W); horizon.fill(0x7D00);
     const prevColor = new Int16Array(W);
 
-    for (let si2 = stepTable.length - 1; si2 >= 1; si2--) {
-        const dist = stepTable[si2];
+    for (let stIdx = stepTable.length - 1; stIdx >= 1; stIdx--) {
+        const dist = stepTable[stIdx];
         const SI = (dist << 4) | (15 - (iPosY2 & 0xF));
-        const perspScale = (si2 === 1) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
-        const heightScale = (si2 === 1) ? 0 : (0x10000 / SI) | 0;
+        const perspScale = (stIdx === 1) ? 0x7D00 : ((((heading & 0xFFFF) / SI) | 0) + 100) | 0;
+        const heightScale = (stIdx === 1) ? 0 : (0x10000 / SI) | 0;
 
-        for (let col = 0; col < W; col++) {
-            const perpOffset = (col - 128) * SI / 1024;
-            const sampleXf = voxCamX + perpOffset;
-            const sampleYf = voxCamY + dist;
-            const wrappedX = ((sampleXf % 256) + 256) % 256;
-            const wrappedY = ((sampleYf % 256) + 256) % 256;
-            const sampleXi = wrappedX | 0;
-            const sampleYi = wrappedY | 0;
-            const fracX16 = ((wrappedX - sampleXi) * 65536) | 0;
-            const halfFrac = (fracX16 >>> 1) & 0x7FFF;
-            const mapIdx = ((sampleYi & 0xFF) << 8) | (sampleXi & 0xFF);
-            const nextIdx = ((sampleYi & 0xFF) << 8) | ((sampleXi + 1) & 0xFF);
+        const stepSize = (SI << 6) >>> 0;
+        const stepLo = stepSize & 0xFFFF;
+        const stepHi = (stepSize >>> 16) & 0xFF;
+
+        let ecxRay = ((iPosX2 << 12) - ((stepSize << 7) >>> 0)) | 0;
+        const dxShifted = (iPosY2 << 4) & 0xFFFF;
+        let bx = (ecxRay >>> 16) & 0xFFFF;
+        bx = (bx & 0x00FF) | ((dxShifted >> 8) << 8);
+        bx = (bx & 0x00FF) | ((((bx >> 8) + ((SI >> 4) & 0xFF)) & 0xFF) << 8);
+
+        let cx = ecxRay & 0xFFFF;
+        cx = (cx >>> 1) & 0xFFFF;  // binary SHR CX,1 at 0xAC3 before DDA loop
+        cx = (cx << 1) & 0xFFFF;
+        let addResult = cx + stepLo;
+        let carry = addResult > 0xFFFF ? 1 : 0;
+        cx = addResult & 0xFFFF;
+        bx = (((bx & 0xFF) + stepHi + carry) & 0xFF) | (bx & 0xFF00);
+        cx = (cx >>> 1) & 0xFFFF;
+
+        for (let renderCol = 0; renderCol < W; renderCol++) {
+            const binCol = 255 - renderCol;
+            const halfFrac = cx & 0x7FFF;
+            const mapIdx = ((bx >> 8) & 0xFF) << 8 | (bx & 0xFF);
+            const nextIdx = ((bx >> 8) & 0xFF) << 8 | ((bx + 1) & 0xFF);
 
             const h0 = heightmap[mapIdx], h1 = heightmap[nextIdx];
             let hDelta = (h1 - h0) | 0;
@@ -329,10 +342,9 @@ function render() {
             if (screenY < 0) screenY = -1;
             if (screenY >= H) screenY = H - 1;
 
-            const oldHorizon = horizon[col];
-            horizon[col] = screenY;
+            const oldHorizon = horizon[binCol];
+            horizon[binCol] = screenY;
             const columnHeight = (oldHorizon - screenY) | 0;
-
             const CH = (halfFrac >>> 8) & 0xFF;
             const c0 = slopemap[mapIdx], c1 = slopemap[nextIdx];
             let cDelta = ((c1 - c0) << 24) >> 24;
@@ -341,24 +353,30 @@ function render() {
             const colorHi = ((cProd >> 8) + c0) & 0xFF;
             const colorAX = ((colorHi << 8) | (cProd & 0xFF)) & 0xFFFF;
 
-            if (columnHeight >= 0) { prevColor[col] = colorAX; continue; }
-
-            const oldColor = prevColor[col];
-            prevColor[col] = colorAX;
-
-            const drawStart = (oldHorizon + 1) < 0 ? 0 : ((oldHorizon + 1) > H ? H : (oldHorizon + 1));
-            const drawEnd = (screenY + 1) < 0 ? 0 : ((screenY + 1) > H ? H : (screenY + 1));
-            if (drawStart >= drawEnd) continue;
-
-            const negHeight = -columnHeight;
-            const colorDiff = (oldColor - colorAX) | 0;
-            const colorStep = (negHeight > 0) ? ((-colorDiff / negHeight) | 0) : 0;
-            let drawColor = oldColor;
-
-            for (let y = drawStart; y < drawEnd; y++) {
-                renderBuf[y * W + col] = (drawColor >> 8) & 0xFF;
-                drawColor = (drawColor + colorStep) | 0;
+            if (columnHeight >= 0) { prevColor[binCol] = colorAX; }
+            else {
+                const oldColor = prevColor[binCol];
+                prevColor[binCol] = colorAX;
+                const drawStart = (oldHorizon + 1) < 0 ? 0 : ((oldHorizon + 1) > H ? H : (oldHorizon + 1));
+                const drawEnd = (screenY + 1) < 0 ? 0 : ((screenY + 1) > H ? H : (screenY + 1));
+                if (drawStart < drawEnd) {
+                    const negHeight = -columnHeight;
+                    const colorDiff = (oldColor - colorAX) | 0;
+                    const colorStep = (negHeight > 0) ? ((-colorDiff / negHeight) | 0) : 0;
+                    let drawColor = oldColor;
+                    for (let y = drawStart; y < drawEnd; y++) {
+                        renderBuf[y * W + renderCol] = (drawColor >> 8) & 0xFF;
+                        drawColor = (drawColor + colorStep) | 0;
+                    }
+                }
             }
+
+            cx = (cx << 1) & 0xFFFF;
+            addResult = cx + stepLo;
+            carry = addResult > 0xFFFF ? 1 : 0;
+            cx = addResult & 0xFFFF;
+            bx = (((bx & 0xFF) + stepHi + carry) & 0xFF) | (bx & 0xFF00);
+            cx = (cx >>> 1) & 0xFFFF;
         }
     }
 }

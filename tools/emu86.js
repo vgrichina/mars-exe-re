@@ -1197,11 +1197,11 @@ class CPU {
                             this.edx = Number(dividend % divisor) >>> 0;
                             effects.push(`EAX=${hex(this.eax,8)} EDX=${hex(this.edx,8)}`);
                         } else if (wide) {
-                            const dividend = ((this.dx & 0xFFFF) << 16) | (this.ax & 0xFFFF);
+                            const dividend = (((this.dx & 0xFFFF) << 16) | (this.ax & 0xFFFF)) >>> 0;
                             const divisor = operand.val & 0xFFFF;
                             if (divisor === 0) { this.halted = true; effects.push(`DIV/0!`); break; }
-                            this.ax = ((dividend / divisor) | 0) & 0xFFFF;
-                            this.dx = (dividend % divisor) & 0xFFFF;
+                            this.ax = ((dividend / divisor) >>> 0) & 0xFFFF;
+                            this.dx = ((dividend % divisor) >>> 0) & 0xFFFF;
                             effects.push(`AX=${hex(this.ax,4)} DX=${hex(this.dx,4)}`);
                         } else {
                             const dividend = this.ax & 0xFFFF;
@@ -1226,7 +1226,7 @@ class CPU {
                             effects.push(`EAX=${hex(this.eax,8)} EDX=${hex(this.edx,8)}`);
                         } else if (wide) {
                             let dividend = ((this.dx & 0xFFFF) << 16) | (this.ax & 0xFFFF);
-                            if (dividend & 0x80000000) dividend -= 0x100000000;
+                            // << and | already produce signed 32-bit in JS; no extra sign extension needed
                             let divisor = operand.val & 0xFFFF;
                             if (divisor & 0x8000) divisor -= 0x10000;
                             if (divisor === 0) { this.halted = true; effects.push(`IDIV/0!`); break; }
