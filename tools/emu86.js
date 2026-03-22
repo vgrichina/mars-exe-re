@@ -41,6 +41,12 @@ class CPU {
         this.traceEnabled = true;
         this.cycleCount = 0;
         this.maxCycles = 0; // 0 = unlimited
+        // Breakpoints: Map of IP → callback(cpu)
+        // callback returns true to halt, false/undefined to continue
+        this.breakpoints = new Map();
+        // Memory watchpoints: Map of linear address → callback(cpu, addr, val, size)
+        // callback returns true to halt. Fires on write.
+        this.watchpoints = new Map();
         // Prefix state (reset each instruction)
         this._segOverride = -1;
         this._opSz32 = false; // 0x66 prefix
@@ -149,11 +155,16 @@ class CPU {
         return (this.mem[a] | (this.mem[(a+1)&0xFFFFF] << 8) |
                 (this.mem[(a+2)&0xFFFFF] << 16) | (this.mem[(a+3)&0xFFFFF] << 24)) >>> 0;
     }
-    writeByte(seg, off, v) { this.mem[this.linear(seg, off)] = v & 0xFF; }
+    writeByte(seg, off, v) {
+        const a = this.linear(seg, off);
+        this.mem[a] = v & 0xFF;
+        this._checkWatch(a, v & 0xFF, 1);
+    }
     writeWord(seg, off, v) {
         const a = this.linear(seg, off);
         this.mem[a] = v & 0xFF;
         this.mem[(a + 1) & 0xFFFFF] = (v >> 8) & 0xFF;
+        this._checkWatch(a, v & 0xFFFF, 2);
     }
     writeDword(seg, off, v) {
         const a = this.linear(seg, off);
@@ -161,6 +172,15 @@ class CPU {
         this.mem[(a+1)&0xFFFFF] = (v >> 8) & 0xFF;
         this.mem[(a+2)&0xFFFFF] = (v >> 16) & 0xFF;
         this.mem[(a+3)&0xFFFFF] = (v >> 24) & 0xFF;
+        this._checkWatch(a, v >>> 0, 4);
+    }
+
+    _checkWatch(addr, val, size) {
+        if (this.watchpoints.size === 0) return;
+        for (let i = 0; i < size; i++) {
+            const wp = this.watchpoints.get((addr + i) & 0xFFFFF);
+            if (wp && wp(this, addr, val, size)) { this.halted = true; }
+        }
     }
 
     // Fetch from CS:IP, advance IP
@@ -1445,9 +1465,32 @@ class CPU {
     }
 
     // === Run N steps or until halted ===
+    // Set breakpoint at CS:IP offset. callback(cpu) called before execution.
+    // If callback returns true, cpu halts. Address is code offset (IP value).
+    addBreakpoint(ip, callback) {
+        this.breakpoints.set(ip, callback);
+    }
+
+    removeBreakpoint(ip) {
+        this.breakpoints.delete(ip);
+    }
+
+    // Watch memory writes at a linear address. callback(cpu, addr, val, size).
+    // Returns true to halt.
+    addWatchpoint(linearAddr, callback) {
+        this.watchpoints.set(linearAddr & 0xFFFFF, callback);
+    }
+
+    removeWatchpoint(linearAddr) {
+        this.watchpoints.delete(linearAddr & 0xFFFFF);
+    }
+
     run(maxSteps) {
         let n = 0;
         while (!this.halted && (maxSteps === undefined || n < maxSteps)) {
+            // Check breakpoints before executing
+            const bp = this.breakpoints.get(this.ip);
+            if (bp && bp(this)) { this.halted = true; break; }
             this.step();
             n++;
         }
@@ -1601,6 +1644,27 @@ function main() {
             case "--mouse-dx": cpu.mouseDX = parseInt(args[++i]); break;
             case "--mouse-dy": cpu.mouseDY = parseInt(args[++i]); break;
             case "--no-mouse": cpu.mousePresent = false; break;
+            case "--break": {
+                const addr = parseInt(args[++i]);
+                cpu.addBreakpoint(addr, () => true);
+                break;
+            }
+            case "--watch": {
+                const waddr = parseInt(args[++i]);
+                cpu.addWatchpoint(waddr, (c, addr, val, size) => {
+                    console.error(`WATCH ${hex(addr,5)}: ${size === 1 ? hex(val,2) : (size === 2 ? hex(val,4) : hex(val,8))} @ ${hex(c.cs,4)}:${hex(c.ip,4)}`);
+                    return false;
+                });
+                break;
+            }
+            case "--watch-break": {
+                const wbaddr = parseInt(args[++i]);
+                cpu.addWatchpoint(wbaddr, (c, addr, val, size) => {
+                    console.error(`WATCH-BREAK ${hex(addr,5)}: ${size === 1 ? hex(val,2) : (size === 2 ? hex(val,4) : hex(val,8))} @ ${hex(c.cs,4)}:${hex(c.ip,4)}`);
+                    return true;
+                });
+                break;
+            }
             case "--help":
                 console.log(`emu86.js — mars.exe emulator
 Usage:
@@ -1615,6 +1679,9 @@ Usage:
   --mouse-dx <N>     Set mouse delta X
   --mouse-dy <N>     Set mouse delta Y
   --no-mouse         Disable mouse
+  --break <IP>       Break at code offset (hex: 0x0A1F)
+  --watch <addr>     Log writes to linear address (hex)
+  --watch-break <a>  Break on write to linear address (hex)
 
 Trace format:
   SSSS:OOOO  HEXBYTES             ; register/memory effects`);

@@ -163,11 +163,17 @@ function subdivide(buf, start, size) {
 
 function genColormap() {
     colormap.fill(0xFF);
+    // Binary does one PRNG call (updating [035D]) before corners, then
+    // subdivide uses SI register copy — [035D] is NOT updated by subdivide.
+    // Save/restore seed so subdivide's PRNG doesn't leak to next gen_* call.
+    prng();
+    const savedSeed = seed;
     colormap[0x0000] = 0;
     colormap[0x0080] = 0xFE;
     colormap[0x8000] = 0xFE;
     colormap[0x8080] = 0;
     subdivide(colormap, 0, 256);
+    seed = savedSeed;
     for (let i = 0; i < 65536; i++) {
         colormap[i] = (colormap[i] >> 3) + 0x40;
     }
@@ -175,8 +181,11 @@ function genColormap() {
 
 function genHeightmap() {
     heightmap.fill(0xFF);
+    prng();
+    const savedSeed = seed;
     heightmap[0] = 0x80;
     subdivide(heightmap, 0, 256);
+    seed = savedSeed;
 
     // First smooth pass: table-driven asymmetric kernel (file 0x390)
     // Binary loads neighbor offsets from DS:032F/0331/0333/0335 via [034F]<<4 index
