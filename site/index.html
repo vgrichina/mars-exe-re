@@ -23,13 +23,18 @@
       <a href="#story">Story</a>
       <a href="#architecture">Architecture</a>
       <a href="#source">Source Code</a>
-      <a href="#demo">Live Demo</a>
       <a href="https://github.com/vgrichina/mars-exe-re">GitHub</a>
       <a href="/remix" class="remix-btn">Remix on Berrry</a>
     </nav>
   </div>
-  <div class="hero-demo">
+  <div class="hero-demo" id="demo">
     <canvas id="hero-canvas" width="256" height="200"></canvas>
+    <div class="demo-controls">
+      <label>Seed: <input type="number" id="seed-input" value="42" min="0" max="32767"></label>
+      <button id="seed-btn">Generate</button>
+      <button id="fullscreen-btn" title="Fullscreen">&#x26F6;</button>
+      <span class="demo-hint">Drag to move &middot; Arrow keys / WASD</span>
+    </div>
   </div>
 </header>
 
@@ -410,22 +415,6 @@ seed 32000: PIXEL PERFECT</pre>
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!-- LIVE DEMO                                                               -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<section id="demo" class="section section-dark">
-  <div class="container">
-    <h2>Live Demo</h2>
-    <div class="demo-wrap">
-      <canvas id="demo-canvas" width="256" height="200"></canvas>
-      <div class="demo-controls">
-        <label>Seed: <input type="number" id="seed-input" value="42" min="0" max="32767"></label>
-        <button id="seed-btn">Generate</button>
-        <span class="demo-hint">Drag to move camera &middot; Arrow keys / WASD &middot; P to save PNG</span>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- FOOTER                                                                  -->

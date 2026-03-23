@@ -377,24 +377,45 @@ function setupDemo(canvas, initialSeed) {
   return { setPos(x,y) { posX=x; posY=y; } };
 }
 
-// Hero canvas
-const heroDemo = setupDemo(document.getElementById('hero-canvas'), (Date.now() * 7) & 0x7FFF);
-
-// Interactive demo canvas
-let demoInstance = setupDemo(document.getElementById('demo-canvas'), 42);
+// Single demo canvas in hero
+const heroCanvas = document.getElementById('hero-canvas');
+let heroDemo = setupDemo(heroCanvas, (Date.now() * 7) & 0x7FFF);
 
 document.getElementById('seed-btn').addEventListener('click', () => {
   const seed = parseInt(document.getElementById('seed-input').value) & 0x7FFF;
-  // Recreate
-  const canvas = document.getElementById('demo-canvas');
-  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-  demoInstance = setupDemo(canvas, seed);
+  heroCanvas.getContext('2d').clearRect(0, 0, heroCanvas.width, heroCanvas.height);
+  heroDemo = setupDemo(heroCanvas, seed);
 });
 
-// Keyboard for demo
-window.addEventListener('keydown', e => {
-  if (e.key === 'ArrowLeft' || e.key === 'a') heroDemo.setPos && 0;
-  // Let the demo handle keys via its own listener
+// Fullscreen toggle
+const heroDemoEl = document.getElementById('demo');
+const fsBtn = document.getElementById('fullscreen-btn');
+fsBtn.addEventListener('click', () => {
+  if (heroDemoEl.classList.contains('fullscreen')) {
+    // Exit fullscreen
+    heroDemoEl.classList.remove('fullscreen');
+    document.body.style.overflow = '';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } else {
+    // Enter fullscreen — use Fullscreen API on desktop, CSS-only on mobile
+    heroDemoEl.classList.add('fullscreen');
+    document.body.style.overflow = 'hidden';
+    if (heroDemoEl.requestFullscreen && window.innerWidth > 768) {
+      heroDemoEl.requestFullscreen().catch(() => {});
+    }
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    heroDemoEl.classList.remove('fullscreen');
+    document.body.style.overflow = '';
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && heroDemoEl.classList.contains('fullscreen')) {
+    heroDemoEl.classList.remove('fullscreen');
+    document.body.style.overflow = '';
+  }
 });
 
 // Load sources
