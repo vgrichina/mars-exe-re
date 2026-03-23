@@ -280,15 +280,24 @@ Mar 19   ███         2      ~3.5h     Floor DDA, height projection, pixel-
 Mar 22   ██████      4     ~17h       Emulator, final 6 bug fixes, pixel-perfect ✓
 ```
 
-### Claude Code Token Usage (March 19–22 sessions)
+### Claude Code Token Usage
 
-| Metric | Value |
-|--------|-------|
-| Sessions | 7 |
-| Total messages | 2,001 (837 user / 1,164 assistant) |
-| Output tokens | 437K |
-| Cache read tokens | ~126M |
-| Cache creation tokens | ~2.4M |
+All sessions used Claude Opus 4.6 via [Claude Code](https://claude.com/claude-code). Token counts extracted from session JSONL logs.
+
+| Date | Session | Duration | Output | Cache Read | Cache Create |
+|------|---------|----------|--------|------------|--------------|
+| Mar 19 | 35e20325 | ~2h | 31K | 4.7M | 239K |
+| Mar 19 | f8f8f94c | ~1.5h | 57K | 5.9M | 239K |
+| Mar 22 | ea00620e | ~1.5h | 104K | 29.0M | 406K |
+| Mar 22 | a641c0be | ~9h | 107K | 40.1M | 682K |
+| Mar 22 | a8852825 | ~4.5h | 82K | 25.1M | 327K |
+| Mar 22 | e35885ff | ~2h | 52K | 19.9M | 222K |
+| Mar 23 | 09a33feb | ~10m | 17K | 3.7M | 478K |
+| | **Total** | **~20h** | **451K** | **128.5M** | **2.6M** |
+
+**Grand total: ~131.6M tokens** across 7 sessions and ~2,000 messages.
+
+Most input was served from Anthropic's prompt cache (128.5M cache reads vs 2.6M cache creates), since the annotated hex dump and CLAUDE.md were included in every request and only needed to be cached once per session.
 
 ### Codebase
 
