@@ -297,7 +297,7 @@ All sessions used Claude Opus 4.6 via [Claude Code](https://claude.com/claude-co
 
 **Grand total: ~131.6M tokens** across 7 sessions and ~2,000 messages.
 
-Most input was served from Anthropic's prompt cache (128.5M cache reads vs 2.6M cache creates), since the annotated hex dump and CLAUDE.md were included in every request and only needed to be cached once per session.
+Most input was served from Anthropic's prompt cache (128.5M cache reads vs 2.6M cache creates).
 
 ### Codebase
 
