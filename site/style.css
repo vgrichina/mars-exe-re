@@ -227,6 +227,29 @@ a:hover { text-decoration: underline; }
 .xref:hover { color: #e94560; border-color: #e94560; }
 .match { color: #16c79a; text-align: center; font-weight: bold; }
 
+@media (max-width: 640px) {
+  .mapping-table thead { display: none; }
+  .mapping-table tr {
+    display: block;
+    padding: 12px 0;
+    border-bottom: 1px solid #1a1a2e;
+  }
+  .mapping-table td {
+    display: block;
+    padding: 2px 0;
+    border: none;
+  }
+  .mapping-table td:first-child {
+    color: #ccc;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .mapping-table td:nth-child(2)::before { content: "EXE: "; color: #555; }
+  .mapping-table td:nth-child(3)::before { content: "JS: "; color: #555; }
+  .mapping-table td.match { text-align: left; }
+  .mapping-table td.match::before { content: ""; }
+}
+
 /* === Source panels === */
 .source-panels {
   display: grid;
