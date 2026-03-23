@@ -410,7 +410,7 @@ class CPU {
                     this.dx = this.mouseDY & 0xFFFF;
                     this.mouseDX = 0; this.mouseDY = 0;
                 } else if (this.ax === 0x0005) {
-                    // Read button status
+                    // Read button press info: AX = button status
                     this.ax = this.mouseButtons;
                 }
                 break;
@@ -1425,7 +1425,11 @@ class CPU {
                 hexBytes += hex(this.readByte(startCS, (startIP + i) & 0xFFFF), 2);
             }
             const line = `${hex(startCS,4)}:${hex(startIP,4)}  ${hexBytes.padEnd(24)} ; ${effects.join(" | ")}`;
-            this.trace.push(line);
+            if (this.traceStream) {
+                this.traceStream(line);
+            } else {
+                this.trace.push(line);
+            }
         }
 
         this.cycleCount++;
@@ -1719,19 +1723,46 @@ Trace format:
         process.exit(1);
     }
 
-    // Resolve deferred seg:off watchpoints now that segments are known
+    // Resolve deferred seg:off watchpoints.
+    // Problem: DS/ES/FS/GS are often set by the binary's own init code, so the
+    // load-time values are wrong. We install a one-shot hook on the first
+    // instruction that sets DS (MOV DS,AX) to resolve watches at runtime.
     if (cpu._deferredWatches) {
-        const segMap = { CS: cpu.cs, DS: cpu.ds, ES: cpu.es, SS: cpu.ss, FS: cpu.fs, GS: cpu.gs };
-        for (const w of cpu._deferredWatches) {
-            const seg = segMap[w.segName];
-            if (seg === undefined) { console.error(`Unknown segment: ${w.segName}`); process.exit(1); }
-            const linear = cpu.linear(seg, w.off);
-            cpu.addWatchpoint(linear, (c, addr, val, size) => {
-                const vStr = size === 1 ? hex(val,2) : (size === 2 ? hex(val,4) : hex(val,8));
-                console.error(`WATCH${w.brk ? '-BREAK' : ''} ${w.segName}:${hex(w.off,4)} [${hex(addr,5)}]: ${vStr} @ ${hex(c.cs,4)}:${hex(c.ip,4)}`);
-                return w.brk;
-            });
+        const resolveWatches = () => {
+            const segMap = { CS: cpu.cs, DS: cpu.ds, ES: cpu.es, SS: cpu.ss, FS: cpu.fs, GS: cpu.gs };
+            for (const w of cpu._deferredWatches) {
+                const seg = segMap[w.segName];
+                if (seg === undefined) { console.error(`Unknown segment: ${w.segName}`); process.exit(1); }
+                const linear = cpu.linear(seg, w.off);
+                cpu.addWatchpoint(linear, (c, addr, val, size) => {
+                    const vStr = size === 1 ? hex(val,2) : (size === 2 ? hex(val,4) : hex(val,8));
+                    console.error(`WATCH${w.brk ? '-BREAK' : ''} ${w.segName}:${hex(w.off,4)} [${hex(addr,5)}]: ${vStr} @ ${hex(c.cs,4)}:${hex(c.ip,4)}`);
+                    return w.brk;
+                });
+            }
+            cpu._deferredWatches = null;
+        };
+        // Non-CS segments may change at runtime (binary sets DS in init).
+        // Step through first 1000 instructions waiting for DS to change.
+        const needsDefer = cpu._deferredWatches.some(w => w.segName !== 'CS');
+        if (needsDefer) {
+            const loadDS = cpu.ds;
+            for (let i = 0; i < 1000 && !cpu.halted; i++) {
+                cpu.run(1);
+                if (steps !== undefined) steps--;
+                if (cpu.ds !== loadDS) break;
+            }
         }
+        resolveWatches();
+    }
+
+    // Set up streaming trace output (works even when tracing toggled mid-run via breakpoints)
+    cpu._traceLineCount = 0;
+    if (traceFile) {
+        try { fs.unlinkSync(traceFile); } catch(e) {}
+        cpu.traceStream = (line) => { fs.appendFileSync(traceFile, line + "\n"); cpu._traceLineCount++; };
+    } else {
+        cpu.traceStream = (line) => { process.stdout.write(line + "\n"); cpu._traceLineCount++; };
     }
 
     const n = cpu.run(steps);
@@ -1742,14 +1773,17 @@ Trace format:
         console.error(`      CS=${hex(cpu.cs,4)} DS=${hex(cpu.ds,4)} ES=${hex(cpu.es,4)} FS=${hex(cpu.fs,4)} GS=${hex(cpu.gs,4)} IP=${hex(cpu.ip,4)} CF=${cpu.cf} ZF=${cpu.zf} SF=${cpu.sf}`);
     }
 
-    if (cpu.traceEnabled) {
+    // Flush any buffered trace lines (from non-streaming mode)
+    if (cpu.trace.length > 0) {
         const traceText = cpu.trace.join("\n") + "\n";
         if (traceFile) {
-            fs.writeFileSync(traceFile, traceText);
-            console.error(`Trace written to ${traceFile}`);
+            fs.appendFileSync(traceFile, traceText);
         } else {
             process.stdout.write(traceText);
         }
+    }
+    if (traceFile && cpu._traceLineCount > 0) {
+        console.error(`Trace written to ${traceFile} (${cpu._traceLineCount} lines)`);
     }
 
     if (snapOut) {

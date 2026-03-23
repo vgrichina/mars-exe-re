@@ -35,7 +35,7 @@
 | DS:0353 | pos_y | Camera Y, init 1000 |
 | DS:0355 | prev_x | Saved pos_x each frame |
 | DS:0357 | prev_y | Saved pos_y each frame |
-| DS:0359 | heading | Angle/direction; set to 0xFFFF by speed check when mouse present. Controls perspScale (heading/SI+100) |
+| DS:0359 | heading | Camera terrain height: bilinear_interp(heightmap, posX, posY) + 0x1900, clamped to 0xFFFF on overflow. Controls perspScale (heading/SI+100) |
 | DS:035B | mouse_present | Flag from INT 33h |
 | DS:035D | random_seed | From BIOS timer INT 1Ah |
 | DS:035F | quit_flag | Set on keypress |
@@ -81,6 +81,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 | gen_heightmap | 0x353 | `genHeightmap()` |
 | subdivide | 0x419 | `subdivide(buf, start, size)` |
 | handle_input | 0x608 | mouse/touch/keyboard handlers |
+| camera_height | 0x125C | `cameraHeight()` — bilinear heightmap interp at camera pos |
 | render_columns | 0x659 | `render()` — Pass 1 floor plane loop |
 | unrolled column draw | 0x6DA-0xBD4 | floor pixel loop in `render()` (per-col in JS vs unrolled MOVSB) |
 | fill_sky | 0xBDC | sky gradient in `render()` |
@@ -113,7 +114,7 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 
 ### Pitfalls discovered
 - `B9 40 00` is MOV CX, 0x0040 (64), NOT 0x4000 (16384) — easy to misread in hex dumps
-- Binary heading is effectively 0 or 0xFFFF (not continuous) — heading rotation is minimal
+- Heading = bilinear_interp(heightmap, posX, posY) + 0x1900 — depends on terrain height at camera position
 - Map coordinates use posX>>4 / posY>>4, not raw position values
 - `05 00 40` = ADD AX, 0x4000 (not +64) — the 0x4000 is a quarter-turn in 16-bit angle space
 - Binary alternate path (0x121A) updates prevColor via MOV even when skipping draw (columnHeight >= 0) — missing this causes wrong Gouraud shading start colors on first visible span per column
@@ -124,11 +125,11 @@ The `web/index.html` is a reimplementation of the voxel terrain renderer.
 - Web uses cos/sin for ray direction; binary uses fixed-point DDA
 - Binary has two rendering passes: Pass 1 (floor plane via MOVSB from colormap, per-pixel ray advance) + Pass 2 (voxel heights via dispatch table with slopemap Gouraud). Web implements both passes with float math
 - Keyboard arrows/WASD move camera in fixed X/Y directions (binary only has mouse input)
-- heading=0xFFFF when mouse present (speed check ADD AH,19h at 0x63E). perspScale varies with distance (65535/SI+100). Without mouse, heading=0 and voxel pass produces no visible terrain (perspScale=100 constant, screenY monotonically decreases far-to-near → horizon check always skips)
+- heading = cameraHeight(posX,posY) + 0x1900, clamped to 0xFFFF. CS:105C (file 0x125C) computes bilinear interpolation of heightmap at camera position using ROR to split coords into map index (>>4) and fraction (&0xF). perspScale varies with distance (heading/SI+100)
 - Both smooth passes now match binary in-place behavior (each output feeds subsequent inputs)
 - Sky gradient now at rows 99-139 matching binary (DI continues from floor pass)
 - Gouraud color step sign now matches binary IDIV by negative BP
 - Floor pass now includes forward depth offset: per-row Y = camY + 2048/ECX (binary: ray_y += step per row)
 - Segment assignments in MOVSB pass: DS=colormap [034B], GS=DS segment [0345], ES=DS segment (render buffer destination). Annotation previously had DS/ES swapped.
-- Binary's handle_input CALL 0x125C is overlapping instruction trick (TEST BP,BP; STC; RET) — no-op that preserves AH from INT 33h. Speed check (ADD AH,19h; JNC) sets heading=0xFFFF when mouse present. Web sets heading=0xFFFF to match (required for voxel pass visibility).
+- Binary's handle_input CALL CS:105C (file 0x125C) computes camera terrain height via bilinear heightmap interpolation. ADD AH,19h offsets by 0x1900; JNC/MOV FFFF clamps on overflow. Web port now computes this dynamically via cameraHeight().
 - Web port is now pixel-perfect against binary (verified across 50+ seeds via tools/compare.js)

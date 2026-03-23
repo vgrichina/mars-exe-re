@@ -298,24 +298,27 @@
 ;   SUB [0353], DX           ; pos_y -= mouse_dy
 ;   MOV CX,[0351]; MOV DX,[0353]  ; reload positions
 ;   MOV [0355],CX; MOV [0357],DX  ; save to prev_x, prev_y
-;   CALL 0x125C              ; → overlapping insn: TEST BP,BP; STC; RET (no-op, AH unchanged)
-;   ADD AH, 19h              ; AH = button status high byte + 0x19
+;   CALL CS:105C (file 0x125C) ; → cameraHeight: bilinear interpolation of heightmap
+;                              ;   at (posX, posY). Uses ROR to split into map coords
+;                              ;   (>>4) and fractional part (&0xF). Returns AX = terrain
+;                              ;   height at camera position (16-bit fixed-point).
+;   ADD AH, 19h              ; AX += 0x1900 (height offset for perspective)
 ;   JNC +3                   ; if no carry (AH+19h < 100h), skip
-;   MOV AX, FFFFh            ; heading = 0xFFFF (only when AH+19h overflows)
-;   MOV [0359], AX
+;   MOV AX, FFFFh            ; clamp heading to 0xFFFF on overflow
+;   MOV [0359], AX           ; heading = cameraHeight + 0x1900 (or 0xFFFF if overflow)
 ;   MOV AH, 01h; INT 16h    ; BIOS: check keyboard buffer
 ;   JZ +9                    ; no key → skip to ret
 ;   MOV byte [035F], 1       ; quit_flag = 1
 ;   XOR AH, AH; INT 16h     ; consume key
 ;   RET
-; Note: with no mouse, AX=0 throughout → AH+19h=19h, no carry → heading stays 0.
-; With mouse, AH from INT 33h(05h) button status can overflow → heading=FFFFh.
-; heading=FFFFh boosts perspScale (heading/SI+100) to ~260 for typical SI values,
-; pushing terrain projection down on screen for a horizon-level view.
+; Note: heading = bilinear_interp(heightmap, posX, posY) + 0x1900.
+; This makes the camera's perspective scale depend on terrain height below it.
+; Higher terrain → larger heading → larger perspScale → terrain drawn higher on screen.
+; Overflow clamp to 0xFFFF prevents extreme values on tall terrain.
 00000600: 02e8 15fe 83c4 04c3 33c9 33d2 33c0 803e  ; (end of subdivide) | XOR CX,DX,AX | CMP [035B],0
 00000610: 5b03 0074 0eb8 0b00 cd33 5152 b805 00cd  ; JZ skip | INT 33h(0Bh) mouse motion | PUSH CX,DX | INT 33h(05h)
 00000620: 335a 5901 0e51 0329 1653 038b 0e51 038b  ; POP DX,CX | pos_x+=CX | pos_y-=DX | CX=[0351] DX=[0353]
-00000630: 1653 0389 0e55 0389 1657 03e8 1e0c 80c4  ; [0355]=CX [0357]=DX | CALL 125C | ADD AH,19h
+00000630: 1653 0389 0e55 0389 1657 03e8 1e0c 80c4  ; [0355]=CX [0357]=DX | CALL cameraHeight(105C) | ADD AH,19h
 00000640: 1973 03b8 ffff a359 03b4 01cd 1674 09c6  ; JNC+3 | heading=FFFF | INT 16h(01) | JZ+9 | quit=1
 00000650: 065f 0301 32e4 cd16 c3                    ; XOR AH,AH | INT 16h(00) consume | RET
 
