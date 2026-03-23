@@ -52,7 +52,7 @@ const EXE_LINE_MAP = {};
 async function loadSources() {
   const [exeText, jsText] = await Promise.all([
     fetch('../mars_annotated.txt').then(r => r.text()),
-    fetch('../web/mars.js').then(r => r.text()),
+    fetch('mars.js').then(r => r.text()),
   ]);
 
   renderExeSource(exeText);
@@ -332,6 +332,7 @@ document.addEventListener('click', e => {
 function setupDemo(canvas, initialSeed) {
   const mars = createMars(initialSeed);
   const ctx = canvas.getContext('2d');
+  const SW = 320;
 
   const palette = new Uint32Array(256);
   for (let i = 0; i < 97; i++) {
@@ -341,7 +342,7 @@ function setupDemo(canvas, initialSeed) {
     palette[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
   }
 
-  const imgData = ctx.createImageData(W, H);
+  const imgData = ctx.createImageData(SW, H);
   const pixels = new Uint32Array(imgData.data.buffer);
 
   let posX = 1000, posY = 1000;
@@ -366,9 +367,34 @@ function setupDemo(canvas, initialSeed) {
     e.preventDefault();
   }, {passive:false});
 
+  const keys = {};
+  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  // Compass indicator pixels (matching binary)
+  const compassPixels = [
+    [199,310],[199,313],[199,314],[199,317],[199,318],[199,319],
+    [198,310],[198,314],[198,317],
+    [197,309],[197,310],[197,311],[197,313],[197,314],[197,315],[197,317],[197,318],[197,319]
+  ];
+
   function frame() {
+    if (keys['ArrowLeft'] || keys['a']) posX = (posX - 4) | 0;
+    if (keys['ArrowRight'] || keys['d']) posX = (posX + 4) | 0;
+    if (keys['ArrowUp'] || keys['w']) posY = (posY + 4) | 0;
+    if (keys['ArrowDown'] || keys['s']) posY = (posY - 4) | 0;
     mars.render(posX, posY);
-    for (let i = 0; i < W * H; i++) pixels[i] = palette[mars.renderBuf[i]];
+
+    // Blit to 320-wide screen (centered at cols 32-287)
+    pixels.fill(0xFF000000);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        pixels[y * SW + x + 32] = palette[mars.renderBuf[y * W + x]];
+
+    // Compass
+    const cc = palette[0x60];
+    for (const [y, x] of compassPixels) pixels[y * SW + x] = cc;
+
     ctx.putImageData(imgData, 0, 0);
     requestAnimationFrame(frame);
   }

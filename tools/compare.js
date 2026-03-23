@@ -5,7 +5,7 @@
 
 const fs = require("fs");
 const { CPU, loadMZ } = require("./emu86.js");
-const { createMars, PAL6, W, H } = require("../web/mars.js");
+const { createMars, PAL6, W, H } = require("../site/mars.js");
 
 // === Parse args ===
 const args = process.argv.slice(2);
