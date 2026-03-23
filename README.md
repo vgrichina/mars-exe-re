@@ -2,7 +2,11 @@
 
 A reverse engineering project that takes a 5.6KB DOS executable (`mars.exe`) — a real-time voxel terrain renderer from the mid-90s — and produces a pixel-perfect web port, a fully annotated disassembly, and a custom 16-bit x86 emulator for verification.
 
-![Mars voxel terrain](https://img.shields.io/badge/platform-DOS%20MZ%2016--bit%20x86-blue) ![Status](https://img.shields.io/badge/status-pixel--perfect-green)
+![Mars voxel terrain](screenshot.png)
+
+![Platform](https://img.shields.io/badge/platform-DOS%20MZ%2016--bit%20x86-blue) ![Status](https://img.shields.io/badge/status-pixel--perfect-green)
+
+**[Live Demo & Interactive Source Code](https://mars-exe.berrry.app)**
 
 ## Original Work
 

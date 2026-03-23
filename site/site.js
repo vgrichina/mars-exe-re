@@ -415,33 +415,27 @@ document.getElementById('seed-btn').addEventListener('click', () => {
 
 // Fullscreen toggle
 const heroDemoEl = document.getElementById('demo');
-const fsBtn = document.getElementById('fullscreen-btn');
-fsBtn.addEventListener('click', () => {
-  if (heroDemoEl.classList.contains('fullscreen')) {
-    // Exit fullscreen
-    heroDemoEl.classList.remove('fullscreen');
-    document.body.style.overflow = '';
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  } else {
-    // Enter fullscreen — use Fullscreen API on desktop, CSS-only on mobile
-    heroDemoEl.classList.add('fullscreen');
-    document.body.style.overflow = 'hidden';
-    if (heroDemoEl.requestFullscreen && window.innerWidth > 768) {
-      heroDemoEl.requestFullscreen().catch(() => {});
-    }
+function exitFullscreen() {
+  heroDemoEl.classList.remove('fullscreen');
+  document.body.classList.remove('is-fullscreen');
+  document.body.style.overflow = '';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+function enterFullscreen() {
+  heroDemoEl.classList.add('fullscreen');
+  document.body.classList.add('is-fullscreen');
+  document.body.style.overflow = 'hidden';
+  if (heroDemoEl.requestFullscreen && window.innerWidth > 768) {
+    heroDemoEl.requestFullscreen().catch(() => {});
   }
-});
+}
+document.getElementById('fullscreen-btn').addEventListener('click', enterFullscreen);
+document.getElementById('fullscreen-exit').addEventListener('click', exitFullscreen);
 document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    heroDemoEl.classList.remove('fullscreen');
-    document.body.style.overflow = '';
-  }
+  if (!document.fullscreenElement) exitFullscreen();
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && heroDemoEl.classList.contains('fullscreen')) {
-    heroDemoEl.classList.remove('fullscreen');
-    document.body.style.overflow = '';
-  }
+  if (e.key === 'Escape' && heroDemoEl.classList.contains('fullscreen')) exitFullscreen();
 });
 
 // Load sources
