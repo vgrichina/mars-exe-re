@@ -4,6 +4,13 @@ A reverse engineering project that takes a 5.6KB DOS executable (`mars.exe`) —
 
 ![Mars voxel terrain](https://img.shields.io/badge/platform-DOS%20MZ%2016--bit%20x86-blue) ![Status](https://img.shields.io/badge/status-pixel--perfect-green)
 
+## Original Work
+
+**Mars** was written by [Tim Clarke](https://www.pouet.net/prod.php?which=4662) in 1993 while still at school. The demo gained legendary status in the demoscene for generating and rendering fractal voxel terrain in real-time — all in under 6KB. Running at full speed on a 486, it was remarkable enough that Tim was headhunted to work for space agency Lunacorp in Washington for several summers while studying at Cambridge University.
+
+- [Pouët page](https://www.pouet.net/prod.php?which=4662)
+- [Download from Hornet archive](https://files.scene.org/view/mirrors/hornet/demos/1994/m/mars.zip)
+
 ## What is mars.exe?
 
 A tiny DOS program that generates and renders fractal voxel terrain in real-time using only Mode 13h VGA (320×200, 256 colors). It implements:
@@ -294,4 +301,4 @@ Mar 22   ██████      4     ~17h       Emulator, final 6 bug fixes, p
 
 ## License
 
-This is a reverse engineering research project. The original `mars.exe` binary is not included in the repository.
+This is a reverse engineering research project for educational purposes. The original `mars.exe` binary is copyright Tim Clarke (1993) and is not included in this repository — download it from the [Hornet archive](https://files.scene.org/view/mirrors/hornet/demos/1994/m/mars.zip). All reverse-engineered code in this repository is original work.
