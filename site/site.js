@@ -399,7 +399,7 @@ function setupDemo(canvas, initialSeed) {
         recordedChunks = [];
         // Create 4x upscaled canvas for crisp pixel recording
         recCanvas = document.createElement('canvas');
-        recCanvas.width = SW * 4; recCanvas.height = H * 4;
+        recCanvas.width = W * 4; recCanvas.height = H * 4;
         recCanvas.style.display = 'none';
         document.body.appendChild(recCanvas);
         const stream = recCanvas.captureStream();
@@ -448,7 +448,7 @@ function setupDemo(canvas, initialSeed) {
     if (recCanvas) {
       const rc = recCanvas.getContext('2d');
       rc.imageSmoothingEnabled = false;
-      rc.drawImage(canvas, 0, 0, SW * 4, H * 4);
+      rc.drawImage(canvas, 32, 0, W, H, 0, 0, W * 4, H * 4);
     }
     requestAnimationFrame(frame);
   }
