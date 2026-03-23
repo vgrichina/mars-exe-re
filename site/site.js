@@ -369,21 +369,42 @@ function setupDemo(canvas, initialSeed) {
 
   const keys = {};
   let recorder = null, recordedChunks = [];
+
+  function getMimeType() {
+    for (const t of ['video/webm;codecs=vp9', 'video/webm', 'video/mp4']) {
+      if (MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return '';
+  }
+
   window.addEventListener('keydown', e => {
     keys[e.key] = true;
+    if (e.key === 'p' || e.key === 'P') {
+      const c2 = document.createElement('canvas');
+      c2.width = SW; c2.height = H;
+      const ctx2 = c2.getContext('2d');
+      ctx2.drawImage(canvas, 0, 0);
+      const a = document.createElement('a');
+      a.download = 'mars_screenshot.png';
+      a.href = c2.toDataURL('image/png');
+      a.click();
+    }
     if (e.key === 'r' || e.key === 'R') {
       if (recorder && recorder.state === 'recording') {
         recorder.stop();
       } else {
+        const mime = getMimeType();
+        if (!mime) { alert('Recording not supported in this browser'); return; }
         recordedChunks = [];
         const stream = canvas.captureStream(30);
-        recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recorder = new MediaRecorder(stream, { mimeType: mime });
         recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
         recorder.onstop = () => {
-          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+          const blob = new Blob(recordedChunks, { type: mime });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          a.download = 'mars_recording.webm';
+          a.download = 'mars_recording.' + ext;
           a.click();
           URL.revokeObjectURL(a.href);
         };
@@ -427,7 +448,10 @@ function setupDemo(canvas, initialSeed) {
 
 // Single demo canvas in hero
 const heroCanvas = document.getElementById('hero-canvas');
-let heroDemo = setupDemo(heroCanvas, (Date.now() * 7) & 0x7FFF);
+const seedInput = document.getElementById('seed-input');
+const initialSeed = (Date.now() * 7) & 0x7FFF;
+seedInput.value = initialSeed;
+let heroDemo = setupDemo(heroCanvas, initialSeed);
 
 document.getElementById('seed-btn').addEventListener('click', () => {
   const seed = parseInt(document.getElementById('seed-input').value) & 0x7FFF;
