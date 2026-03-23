@@ -52,6 +52,13 @@ a:hover { text-decoration: underline; }
   transition: all 0.2s;
 }
 .hero-nav a:hover { color: #e94560; border-color: #e94560; text-decoration: none; }
+.remix-btn.remix-btn {
+  background: #e94560;
+  color: #fff;
+  border-color: #e94560;
+  font-weight: 600;
+}
+.remix-btn.remix-btn:hover { background: #c23652; border-color: #c23652; color: #fff; }
 .hero-demo {
   margin-top: 40px;
 }
