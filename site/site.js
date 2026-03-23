@@ -368,7 +368,7 @@ function setupDemo(canvas, initialSeed) {
   }, {passive:false});
 
   const keys = {};
-  let recorder = null, recordedChunks = [];
+  let recorder = null, recordedChunks = [], recCanvas = null;
 
   function getMimeType() {
     for (const t of ['video/webm;codecs=vp9', 'video/webm', 'video/mp4']) {
@@ -392,11 +392,17 @@ function setupDemo(canvas, initialSeed) {
     if (e.key === 'r' || e.key === 'R') {
       if (recorder && recorder.state === 'recording') {
         recorder.stop();
+        if (recCanvas) { recCanvas.remove(); recCanvas = null; }
       } else {
         const mime = getMimeType();
         if (!mime) { alert('Recording not supported in this browser'); return; }
         recordedChunks = [];
-        const stream = canvas.captureStream(30);
+        // Create 4x upscaled canvas for crisp pixel recording
+        recCanvas = document.createElement('canvas');
+        recCanvas.width = SW * 4; recCanvas.height = H * 4;
+        recCanvas.style.display = 'none';
+        document.body.appendChild(recCanvas);
+        const stream = recCanvas.captureStream();
         recorder = new MediaRecorder(stream, { mimeType: mime });
         recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
         recorder.onstop = () => {
@@ -439,6 +445,11 @@ function setupDemo(canvas, initialSeed) {
     for (const [y, x] of compassPixels) pixels[y * SW + x] = cc;
 
     ctx.putImageData(imgData, 0, 0);
+    if (recCanvas) {
+      const rc = recCanvas.getContext('2d');
+      rc.imageSmoothingEnabled = false;
+      rc.drawImage(canvas, 0, 0, SW * 4, H * 4);
+    }
     requestAnimationFrame(frame);
   }
   frame();
