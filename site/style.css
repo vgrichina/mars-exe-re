@@ -363,22 +363,27 @@ a:hover { text-decoration: underline; }
   margin: 0;
   width: 100vw !important;
   max-width: none;
-  overflow: visible;
+  overflow: hidden;
 }
 .hero-demo.fullscreen canvas {
-  width: auto !important;
-  height: 100vh !important;
-  max-width: 100vw;
+  /* Default: width-constrained (narrow/portrait), crop sides like hero */
+  min-width: calc(100vw * 320 / 256) !important;
+  width: calc(100vw * 320 / 256) !important;
+  height: auto !important;
+  max-height: 100vh;
   aspect-ratio: 320 / 200;
+  flex-shrink: 0;
   margin-left: 0 !important;
   border: none !important;
   border-radius: 0 !important;
 }
-@media (max-width: 768px), (orientation: portrait) {
+@media (min-aspect-ratio: 320/200) {
+  /* Landscape/desktop: fit full 320x200 to height, no crop */
   .hero-demo.fullscreen canvas {
-    width: 100vw !important;
+    min-width: 0 !important;
+    width: auto !important;
     height: 100vh !important;
-    aspect-ratio: auto;
+    flex-shrink: 1;
   }
 }
 .hero-demo.fullscreen .demo-controls { display: none; }
