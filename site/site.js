@@ -51,7 +51,7 @@ const EXE_LINE_MAP = {};
 
 async function loadSources() {
   const [exeText, jsText] = await Promise.all([
-    fetch('../mars_annotated.txt').then(r => r.text()),
+    fetch('mars_annotated.txt').then(r => r.text()),
     fetch('mars.js').then(r => r.text()),
   ]);
 
@@ -368,7 +368,29 @@ function setupDemo(canvas, initialSeed) {
   }, {passive:false});
 
   const keys = {};
-  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  let recorder = null, recordedChunks = [];
+  window.addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if (e.key === 'r' || e.key === 'R') {
+      if (recorder && recorder.state === 'recording') {
+        recorder.stop();
+      } else {
+        recordedChunks = [];
+        const stream = canvas.captureStream(30);
+        recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        recorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'mars_recording.webm';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        };
+        recorder.start();
+      }
+    }
+  });
   window.addEventListener('keyup', e => { keys[e.key] = false; });
 
   // Compass indicator pixels (matching binary)

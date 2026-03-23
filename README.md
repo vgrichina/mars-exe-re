@@ -4,8 +4,6 @@ A reverse engineering project that takes a 5.6KB DOS executable (`mars.exe`) —
 
 ![Mars voxel terrain](screenshot.png)
 
-![Platform](https://img.shields.io/badge/platform-DOS%20MZ%2016--bit%20x86-blue) ![Status](https://img.shields.io/badge/status-pixel--perfect-green)
-
 **[Live Demo & Interactive Source Code](https://mars-exe.berrry.app)**
 
 ## Original Work
