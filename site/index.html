@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mars.exe — Reverse Engineering a 5KB DOS Voxel Renderer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- HERO                                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Mars<span class="exe">.exe</span></h1>
+    <p class="subtitle">Reverse engineering a 5,649-byte DOS voxel terrain renderer from 1993</p>
+    <p class="badges">
+      <span class="badge badge-dos">DOS MZ 16-bit x86</span>
+      <span class="badge badge-ok">Pixel-Perfect</span>
+    </p>
+    <nav class="hero-nav">
+      <a href="#story">Story</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#source">Source Code</a>
+      <a href="#demo">Live Demo</a>
+    </nav>
+  </div>
+  <div class="hero-demo">
+    <canvas id="hero-canvas" width="256" height="200"></canvas>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- STORY                                                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="story" class="section">
+  <div class="container">
+    <h2>The Story</h2>
+
+    <div class="story-intro">
+      <p><strong>Mars</strong> was written by <a href="https://www.pouet.net/prod.php?which=4662">Tim Clarke</a> in 1993 while still at school. The demo gained legendary status in the demoscene for generating and rendering fractal voxel terrain in real-time &mdash; all in under 6KB. Running at full speed on a 486, it was remarkable enough that Tim was headhunted to work for space agency Lunacorp in Washington for several summers while studying at Cambridge University.</p>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-marker">Day 1</div>
+        <div class="timeline-content">
+          <h3>Down the Rabbit Hole <span class="date">March 9</span></h3>
+          <p>Started with a 5,649-byte DOS executable from the <a href="https://files.scene.org/view/mirrors/hornet/demos/1994/m/mars.zip">Hornet demoscene archive</a>. Parsed the MZ header, mapped segment layout, found entry point at file offset 0x200. The entire binary was annotated by hand in a hex dump format &mdash; every instruction, every data table, every constant. 800 lines that became the single source of truth.</p>
+          <p>Key algorithms fell into place: the PRNG (<code>seed * 0xAB + 0x2BCD mod 0xCF85</code>), diamond-square fractals with BX register walk, palette at 0x14CA. First web port worked but looked wrong &mdash; horizon at wrong height, perspective formula off, hex misreads (<code>B9 40 00</code> is MOV CX,64 not 16384).</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">Day 2</div>
+        <div class="timeline-content">
+          <h3>Getting the Axes Right <span class="date">March 10</span></h3>
+          <p>Terrain was rendering 90&deg; rotated. A <code>+0x4000</code> angle offset had leaked into the voxel pass. Fixed axis swap, added height &amp; color interpolation, sorted out the horizon buffer &mdash; <code>0x7D00</code> was two packed 16-bit words in a STOSD.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">Day 3</div>
+        <div class="timeline-content">
+          <h3>The One-Line Fix <span class="date">March 11</span></h3>
+          <p>A single missing line caused dramatic vertical streak artifacts: the <code>prevColor</code> buffer wasn't being cleared between frames. The binary zeroes it at 0xC40 with <code>REP STOSD</code>. One line of code, hours of debugging.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">Days 4&ndash;5</div>
+        <div class="timeline-content">
+          <h3>The Annotation Audit <span class="date">March 17&ndash;18</span></h3>
+          <p>196 lines of the annotated hex dump had accumulated address drift (7&ndash;16 bytes off). Every address from 0x420 to 0xC20 re-verified with <code>xxd</code>. Two architectural fixes emerged: <em>viewAngle was fiction</em> (camera always faces +Y), and float math was wrong &mdash; replaced with integer DDA (<code>ADD BX,AX; ADC SI,BP</code>).</p>
+          <p>Key discovery: byte <code class="hl">F5</code> in pattern <code>A4 03 D8 13 F5</code> is a ModRM byte (ADC SI,BP), <em>not</em> a standalone CMC instruction.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">Day 6</div>
+        <div class="timeline-content">
+          <h3>The Last Few Percent <span class="date">March 19</span></h3>
+          <p>Height projection was truncating to 8 bits. Missing <code>DEC BP</code> compensation. Two voxel pass bugs: skip path must update <code>prevColor</code>, and dispatch table draw range is off-by-one due to DI wrap trick. Floor pass: pixel-perfect. Voxel pass: down to 0&ndash;81 pixel diffs.</p>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">Day 7</div>
+        <div class="timeline-content">
+          <h3>The Emulator Marathon <span class="date">March 22</span></h3>
+          <p>Four sessions, 17 hours. Built a custom 16-bit x86 emulator (1,800 lines of JS) to run <code>mars.exe</code> instruction-by-instruction. First comparison: 39.5% pixel differences. Fixed PRNG seed isolation, DIV/IDIV edge cases, dynamic camera height, <code>FS:[BX+1]</code> carry semantics.</p>
+          <div class="result-box">
+            <pre>seed 42:    PIXEL PERFECT
+seed 100:   PIXEL PERFECT
+seed 500:   PIXEL PERFECT
+seed 1000:  PIXEL PERFECT
+seed 5000:  PIXEL PERFECT
+seed 8888:  PIXEL PERFECT
+seed 12345: PIXEL PERFECT
+seed 32000: PIXEL PERFECT</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="stat-value">5,649</div>
+        <div class="stat-label">bytes in original EXE</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">802</div>
+        <div class="stat-label">lines annotated by hand</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">1,800</div>
+        <div class="stat-label">lines in x86 emulator</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">131.6M</div>
+        <div class="stat-label">tokens with Claude Code</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">7</div>
+        <div class="stat-label">days to pixel-perfect</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">~20h</div>
+        <div class="stat-label">total session time</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ARCHITECTURE                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="architecture" class="section section-dark">
+  <div class="container">
+    <h2>Architecture</h2>
+
+    <!-- Memory layout diagram -->
+    <h3>Binary Memory Layout</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 800 320" class="diagram" xmlns="http://www.w3.org/2000/svg">
+        <!-- Background -->
+        <rect x="0" y="0" width="800" height="320" fill="none"/>
+
+        <!-- Segments -->
+        <rect x="40" y="30" width="720" height="40" rx="4" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+        <text x="50" y="55" fill="#e94560" font-size="14" font-weight="bold">CS</text>
+        <text x="80" y="55" fill="#aaa" font-size="12">Code + inline data (entry CS:0000 = file 0x200)</text>
+        <text x="680" y="55" fill="#666" font-size="11">5,649 bytes</text>
+
+        <rect x="40" y="80" width="720" height="40" rx="4" fill="#1a1a2e" stroke="#0f3460" stroke-width="2"/>
+        <text x="50" y="105" fill="#4ea8de" font-size="14" font-weight="bold">DS</text>
+        <text x="80" y="105" fill="#aaa" font-size="12">Runtime vars, BSS (CS + 0x10C paragraphs = file 0x12C0)</text>
+
+        <!-- DS sub-regions -->
+        <rect x="80" y="125" width="100" height="25" rx="3" fill="#0a1628" stroke="#0f3460" stroke-width="1"/>
+        <text x="90" y="142" fill="#4ea8de" font-size="10">Jump table</text>
+        <rect x="190" y="125" width="100" height="25" rx="3" fill="#0a1628" stroke="#0f3460" stroke-width="1"/>
+        <text x="200" y="142" fill="#4ea8de" font-size="10">Step table</text>
+        <rect x="300" y="125" width="80" height="25" rx="3" fill="#0a1628" stroke="#0f3460" stroke-width="1"/>
+        <text x="310" y="142" fill="#4ea8de" font-size="10">Palette</text>
+        <rect x="390" y="125" width="100" height="25" rx="3" fill="#0a1628" stroke="#0f3460" stroke-width="1"/>
+        <text x="400" y="142" fill="#4ea8de" font-size="10">BSS vars</text>
+        <rect x="500" y="125" width="120" height="25" rx="3" fill="#0a1628" stroke="#0f3460" stroke-width="1"/>
+        <text x="510" y="142" fill="#4ea8de" font-size="10">Render buf 256x200</text>
+
+        <rect x="40" y="165" width="350" height="40" rx="4" fill="#1a1a2e" stroke="#16c79a" stroke-width="2"/>
+        <text x="50" y="190" fill="#16c79a" font-size="14" font-weight="bold">FS</text>
+        <text x="80" y="190" fill="#aaa" font-size="12">Heightmap buffer (64KB, fractal 0-255)</text>
+
+        <rect x="410" y="165" width="350" height="40" rx="4" fill="#1a1a2e" stroke="#f5a623" stroke-width="2"/>
+        <text x="420" y="190" fill="#f5a623" font-size="14" font-weight="bold">GS</text>
+        <text x="450" y="190" fill="#aaa" font-size="12">Slopemap buffer (64KB, shading 0-63)</text>
+
+        <rect x="40" y="220" width="350" height="40" rx="4" fill="#1a1a2e" stroke="#9b59b6" stroke-width="2"/>
+        <text x="50" y="245" fill="#9b59b6" font-size="14" font-weight="bold">Colormap</text>
+        <text x="130" y="245" fill="#aaa" font-size="12">Fractal &rarr; palette indices 64-95</text>
+
+        <rect x="410" y="220" width="350" height="40" rx="4" fill="#1a1a2e" stroke="#e74c3c" stroke-width="2"/>
+        <text x="420" y="245" fill="#e74c3c" font-size="14" font-weight="bold">ES = A000:0000</text>
+        <text x="560" y="245" fill="#aaa" font-size="12">VGA framebuffer</text>
+
+        <!-- File offsets -->
+        <text x="40" y="290" fill="#555" font-size="11">File offsets:</text>
+        <text x="130" y="290" fill="#e94560" font-size="11">0x200 code</text>
+        <text x="230" y="290" fill="#0f84b4" font-size="11">0x12C0 jump tbl</text>
+        <text x="360" y="290" fill="#0f84b4" font-size="11">0x1450 step tbl</text>
+        <text x="490" y="290" fill="#0f84b4" font-size="11">0x14CA palette</text>
+      </svg>
+    </div>
+
+    <!-- Rendering pipeline -->
+    <h3>Rendering Pipeline</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 800 400" class="diagram" xmlns="http://www.w3.org/2000/svg">
+        <!-- Generation phase -->
+        <text x="40" y="25" fill="#888" font-size="13" font-weight="bold">GENERATION (once)</text>
+
+        <rect x="40" y="35" width="160" height="50" rx="6" fill="#1a1a2e" stroke="#16c79a" stroke-width="2"/>
+        <text x="55" y="57" fill="#16c79a" font-size="12" font-weight="bold">Diamond-Square</text>
+        <text x="55" y="73" fill="#888" font-size="10">PRNG + fractal subdivision</text>
+
+        <line x1="200" y1="60" x2="230" y2="60" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="230" y="35" width="120" height="50" rx="6" fill="#1a1a2e" stroke="#16c79a" stroke-width="2"/>
+        <text x="245" y="57" fill="#16c79a" font-size="12" font-weight="bold">Heightmap</text>
+        <text x="245" y="73" fill="#888" font-size="10">256x256 wrapping</text>
+
+        <line x1="350" y1="60" x2="380" y2="60" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="380" y="35" width="120" height="50" rx="6" fill="#1a1a2e" stroke="#f5a623" stroke-width="2"/>
+        <text x="395" y="57" fill="#f5a623" font-size="12" font-weight="bold">Smooth + Slope</text>
+        <text x="395" y="73" fill="#888" font-size="10">h[i]-h[i+3]+32</text>
+
+        <line x1="500" y1="60" x2="530" y2="60" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="530" y="35" width="120" height="50" rx="6" fill="#1a1a2e" stroke="#9b59b6" stroke-width="2"/>
+        <text x="545" y="57" fill="#9b59b6" font-size="12" font-weight="bold">Colormap</text>
+        <text x="545" y="73" fill="#888" font-size="10">byte>>3 + 0x40</text>
+
+        <!-- Per-frame phase -->
+        <text x="40" y="120" fill="#888" font-size="13" font-weight="bold">PER FRAME</text>
+
+        <!-- Camera height -->
+        <rect x="40" y="130" width="160" height="50" rx="6" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+        <a href="#src-exe-0x125C"><text x="55" y="152" fill="#e94560" font-size="12" font-weight="bold">Camera Height</text></a>
+        <text x="55" y="168" fill="#888" font-size="10">bilinear interp + 0x1900</text>
+
+        <line x1="200" y1="155" x2="230" y2="155" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- Pass 1 -->
+        <rect x="230" y="130" width="160" height="50" rx="6" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+        <a href="#src-exe-0x659"><text x="245" y="152" fill="#e94560" font-size="12" font-weight="bold">Pass 1: Floor Plane</text></a>
+        <text x="245" y="168" fill="#888" font-size="10">99 rows, DDA from colormap</text>
+
+        <line x1="390" y1="155" x2="420" y2="155" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- Pass 2 -->
+        <rect x="420" y="130" width="160" height="50" rx="6" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+        <a href="#src-exe-0xC1F"><text x="435" y="152" fill="#e94560" font-size="12" font-weight="bold">Pass 2: Voxel Cols</text></a>
+        <text x="435" y="168" fill="#888" font-size="10">ray march + Gouraud</text>
+
+        <line x1="580" y1="155" x2="610" y2="155" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- Sky -->
+        <rect x="610" y="130" width="140" height="50" rx="6" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+        <a href="#src-exe-0xBDC"><text x="625" y="152" fill="#e94560" font-size="12" font-weight="bold">Sky Gradient</text></a>
+        <text x="625" y="168" fill="#888" font-size="10">40 rows, heading/row</text>
+
+        <!-- Detail boxes -->
+        <text x="40" y="220" fill="#888" font-size="13" font-weight="bold">KEY TECHNIQUES</text>
+
+        <rect x="40" y="230" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="55" y="252" fill="#4ea8de" font-size="12" font-weight="bold">Fixed-Point DDA</text>
+        <text x="55" y="268" fill="#888" font-size="10">ADD BX,AX; ADC SI,BP</text>
+        <text x="55" y="284" fill="#888" font-size="10">Sub-pixel texture stepping</text>
+
+        <rect x="290" y="230" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="305" y="252" fill="#4ea8de" font-size="12" font-weight="bold">Unrolled MOVSB Loop</text>
+        <text x="305" y="268" fill="#888" font-size="10">256 iterations at 0x6DA-0xBD4</text>
+        <text x="305" y="284" fill="#888" font-size="10">Jump table dispatch by scanline</text>
+
+        <rect x="540" y="230" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="555" y="252" fill="#4ea8de" font-size="12" font-weight="bold">Overlapping Instructions</text>
+        <text x="555" y="268" fill="#888" font-size="10">0x125C: dual-purpose code path</text>
+        <text x="555" y="284" fill="#888" font-size="10">JNZ opcode doubles as TEST+STC</text>
+
+        <rect x="40" y="320" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="55" y="342" fill="#4ea8de" font-size="12" font-weight="bold">Horizon Buffer</text>
+        <text x="55" y="358" fill="#888" font-size="10">256 words, init 0x7D00 (row 125)</text>
+        <text x="55" y="374" fill="#888" font-size="10">Back-to-front occlusion</text>
+
+        <rect x="290" y="320" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="305" y="342" fill="#4ea8de" font-size="12" font-weight="bold">Gouraud Shading</text>
+        <text x="305" y="358" fill="#888" font-size="10">Slopemap color interpolation</text>
+        <text x="305" y="374" fill="#888" font-size="10">IDIV color step, top-down fill</text>
+
+        <rect x="540" y="320" width="230" height="70" rx="6" fill="#0a1628" stroke="#333" stroke-width="1"/>
+        <text x="555" y="342" fill="#4ea8de" font-size="12" font-weight="bold">16-bit Address Carry</text>
+        <text x="555" y="358" fill="#888" font-size="10">FS:[BX+1] wraps BL&rarr;BH</text>
+        <text x="555" y="374" fill="#888" font-size="10">Critical at x=255 boundaries</text>
+
+        <!-- Arrow marker -->
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#555"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <!-- Binary/Web mapping table -->
+    <h3>Binary &harr; Web Mapping</h3>
+    <table class="mapping-table">
+      <thead>
+        <tr><th>Binary Function</th><th>File Offset</th><th>Web Equivalent</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>entry + init</td>
+          <td><a href="#src-exe-0x200" class="xref">0x200&ndash;0x2A5</a></td>
+          <td><a href="#src-js-genColormap" class="xref">genColormap()</a>, <a href="#src-js-genHeightmap" class="xref">genHeightmap()</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>gen_colormap</td>
+          <td><a href="#src-exe-0x2F3" class="xref">0x2F3</a></td>
+          <td><a href="#src-js-genColormap" class="xref">genColormap()</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>gen_heightmap</td>
+          <td><a href="#src-exe-0x353" class="xref">0x353</a></td>
+          <td><a href="#src-js-genHeightmap" class="xref">genHeightmap()</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>subdivide</td>
+          <td><a href="#src-exe-0x419" class="xref">0x419</a></td>
+          <td><a href="#src-js-subdivide" class="xref">subdivide()</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>handle_input</td>
+          <td><a href="#src-exe-0x608" class="xref">0x608</a></td>
+          <td>mouse/touch/keyboard handlers</td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>render_columns</td>
+          <td><a href="#src-exe-0x659" class="xref">0x659</a></td>
+          <td><a href="#src-js-render" class="xref">render()</a> &mdash; Pass 1</td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>fill_sky</td>
+          <td><a href="#src-exe-0xBDC" class="xref">0xBDC</a></td>
+          <td><a href="#src-js-render" class="xref">render()</a> &mdash; sky gradient</td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>ray_march</td>
+          <td><a href="#src-exe-0xC1F" class="xref">0xC1F</a></td>
+          <td><a href="#src-js-render" class="xref">render()</a> &mdash; Pass 2</td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>camera_height</td>
+          <td><a href="#src-exe-0x125C" class="xref">0x125C</a></td>
+          <td><a href="#src-js-cameraHeight" class="xref">cameraHeight()</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Step table</td>
+          <td><a href="#src-exe-0x1450" class="xref">0x1450</a></td>
+          <td><a href="#src-js-stepTable" class="xref">stepTable[]</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+        <tr>
+          <td>Palette data</td>
+          <td><a href="#src-exe-0x14CA" class="xref">0x14CA</a></td>
+          <td><a href="#src-js-PAL6" class="xref">PAL6[]</a></td>
+          <td class="match">&#10003;</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SOURCE CODE                                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="source" class="section">
+  <div class="container">
+    <h2>Annotated Source Code</h2>
+    <p class="source-intro">Click any cross-reference link to jump between the original annotated hex dump and the JavaScript reimplementation. Highlighted regions show corresponding code.</p>
+
+    <div class="source-panels">
+      <!-- Left: EXE hex dump -->
+      <div class="source-panel" id="panel-exe">
+        <div class="panel-header">
+          <span class="panel-icon">&#x1F4BE;</span> mars_annotated.txt
+          <span class="panel-tag">16-bit x86 hex</span>
+        </div>
+        <div class="panel-body" id="exe-source">
+          <!-- Populated by JS -->
+          <div class="loading">Loading annotated hex dump...</div>
+        </div>
+      </div>
+
+      <!-- Right: JS source -->
+      <div class="source-panel" id="panel-js">
+        <div class="panel-header">
+          <span class="panel-icon">&#x1F4C4;</span> mars.js
+          <span class="panel-tag">JavaScript</span>
+        </div>
+        <div class="panel-body" id="js-source">
+          <!-- Populated by JS -->
+          <div class="loading">Loading JavaScript source...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- LIVE DEMO                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="demo" class="section section-dark">
+  <div class="container">
+    <h2>Live Demo</h2>
+    <div class="demo-wrap">
+      <canvas id="demo-canvas" width="256" height="200"></canvas>
+      <div class="demo-controls">
+        <label>Seed: <input type="number" id="seed-input" value="42" min="0" max="32767"></label>
+        <button id="seed-btn">Generate</button>
+        <span class="demo-hint">Drag to move camera &middot; Arrow keys / WASD &middot; P to save PNG</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p>Original <strong>Mars</strong> by Tim Clarke (1993) &middot; <a href="https://www.pouet.net/prod.php?which=4662">Pouet</a> &middot; Reverse-engineered with <a href="https://claude.com/claude-code">Claude Code</a></p>
+  </div>
+</footer>
+
+<script src="../web/mars.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
